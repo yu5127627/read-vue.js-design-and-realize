@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4.响应式数据的基本实现</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script>
+    // 储存副作用函数
+    const bucket = new Set();
+    const data = { text: 'hello world!' };
+
+    // 对数据的代理
+    const obj = new Proxy(data, {
+      // 拦截读取操作
+      get(target, key) {
+        // 将副作用函数添加到储存副作用函数集合中
+        bucket.add(effect);
+        return target[key]
+      },
+      // 拦截设置操作
+      set(target, key, val) {
+        target[key] = val;
+        // 执行副作用函数
+        bucket.forEach(fn => fn());
+      }
+    })
+
+    // 副作用函数
+    const effect = () => {
+      console.log('run count');
+      document.querySelector('#app').innerText = obj.text;
+    }
+
+    effect();
+
+    setTimeout(() => {
+      obj.text = 'hello vue3';
+    }, 1000);
+  </script>
+</body>
+
+</html>

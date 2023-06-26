@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4.3设计一个完善的响应式系统</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script>
+    // 储存副作用函数
+    const bucket = new Set();
+    const data = { text: 'hello world!' };
+
+    // 用一个全局变量储存被注册的副作用函数
+    let activeEffect;
+    // effect 函数用于注册副作用函数
+    function effect(fn) {
+      // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
+      activeEffect = fn;
+      // 执行副作用函数
+      fn();
+    }
+
+    // 对数据的代理
+    const obj = new Proxy(data, {
+      // 拦截读取操作
+      get(target, key) {
+        if (activeEffect) {
+          // 将 activeEffect 中储存的副作用函数收集到 桶 中
+          bucket.add(activeEffect);
+        }
+        return target[key]
+      },
+      // 拦截设置操作
+      set(target, key, val) {
+        target[key] = val;
+        // 执行副作用函数
+        bucket.forEach(fn => fn());
+        return true
+      }
+    })
+
+
+
+    // 注册一个匿名副作用函数
+    effect(
+      // 一个匿名的副作用函数
+      () => {
+        console.log('run count');
+        document.querySelector('#app').innerText = obj.text;
+      }
+    )
+
+    setTimeout(() => {
+      obj.text = 'hello vue3';
+    }, 1000);
+  </script>
+</body>
+
+</html>
