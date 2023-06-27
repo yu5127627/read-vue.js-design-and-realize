@@ -22,14 +22,14 @@
     // 一个标志代表是否制作正在刷新队列
     let isFlushing = false;
     function flushJob() {
-        // 如果队列正在刷新，停止执行
-        if(isFlushing) return
-        // 设置标识符，表示正在运行
-        isFlushing = true;
-        // 在微任务队列中刷新 jobQueue 队列
-        p.then(()=>jobQueue.forEach(job=>job()))
+      // 如果队列正在刷新，停止执行
+      if (isFlushing) return
+      // 设置标识符，表示正在运行
+      isFlushing = true;
+      // 在微任务队列中刷新 jobQueue 队列
+      p.then(() => jobQueue.forEach(job => job()))
         // 结束后重置 isFlushing
-        .finally(()=>isFlushing = false);
+        .finally(() => isFlushing = false);
     }
 
     // 清除遗留的副作用函数
@@ -114,11 +114,11 @@
       // 执行副作用函数
       effectsToRun.forEach(effectFn => {
         // 如果一个副作用函数存在调度器，则调用该调度器，并将副作用函数作为参数传递
-        if(effectFn.options.scheduler) {
-            effectFn.options.scheduler(effectFn);
-        }else {
-            // 否则直接执行副作用函数
-            effectFn();
+        if (effectFn.options.scheduler) {
+          effectFn.options.scheduler(effectFn);
+        } else {
+          // 否则直接执行副作用函数
+          effectFn();
         }
       });
       // effects && effects.forEach(fn => fn());
@@ -150,10 +150,10 @@
       },
       {
         scheduler(fn) {
-            // 每次调度时，将副作用函数添加到 jobQueue 队列中
-            jobQueue.add(fn);
-            // 调用 flushJob 刷新队列
-            flushJob();
+          // 每次调度时，将副作用函数添加到 jobQueue 队列中
+          jobQueue.add(fn);
+          // 调用 flushJob 刷新队列
+          flushJob();
         }
       }
     )
