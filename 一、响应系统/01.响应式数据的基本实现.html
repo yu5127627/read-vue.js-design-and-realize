@@ -5,12 +5,17 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>4.响应式数据的基本实现</title>
+  <title>响应式数据的基本实现</title>
 </head>
 
 <body>
   <div id="app"></div>
+  <div id="app2"></div>
   <script>
+    /*
+      本质：在读取数据时将其副作用函数储存起来，在改变数据时重新执行
+      缺点：新增的属性也依旧会触发副作用函数，正确情况下应该只有已存在的属性才可以触发副作用函数
+    */
     // 储存副作用函数
     const bucket = new Set();
     const data = { text: 'hello world!' };
@@ -21,6 +26,7 @@
       get(target, key) {
         // 将副作用函数添加到储存副作用函数集合中
         bucket.add(effect);
+        bucket.add(effect1);
         return target[key]
       },
       // 拦截设置操作
@@ -33,15 +39,27 @@
 
     // 副作用函数
     const effect = () => {
-      console.log('run count');
+      console.log('app');
       document.querySelector('#app').innerText = obj.text;
     }
+    const effect1 = () => {
+      console.log('app2');
+      document.querySelector('#app2').innerText = obj.text;
+    }
 
+    console.log('default run。。。');
     effect();
+    effect1();
 
     setTimeout(() => {
+      console.log('already have props');
       obj.text = 'hello vue3';
     }, 1000);
+
+    setTimeout(() => {
+      console.log('Not have props');
+      obj.txt = 'hello vue3';
+    }, 2000);
   </script>
 </body>
 

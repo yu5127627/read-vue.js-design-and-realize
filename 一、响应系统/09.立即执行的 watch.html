@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>立即执行的 watch 与回调执行时机</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script>
+    // 储存副作用函数
+    const bucket = new WeakMap();
+    const data = { count: 1, sum: 10 };
+
+    // 清除遗留的副作用函数
+    function cleanup(effectFn) {
+      // 遍历 effectFn.deps 数组
+      for (let i = 0; i < effectFn.deps.length; i++) {
+        // deps 是依赖集合
+        const deps = effectFn.deps[i];
+        // 将 effectFn 从依赖集合中移除
+        deps.delete(effectFn);
+      }
+      // 最后需要重置 effectFn.deps 数组
+      effectFn.deps.length = 0;
+    }
+
+    // 用一个全局变量储存被注册的副作用函数
+    let activeEffect;
+    // effect 栈
+    const effectStack = [];
+    // effect 函数用于注册副作用函数
+    function effect(fn, options = {}) {
+      const effectFn = () => {
+        // 调用 cleanup 函数完成清除工作
+        cleanup(effectFn);
+        // 当 effectFn 执行时，将其设置为当前激活的副作用函数
+        activeEffect = effectFn;
+        // 在调用副作用函数之前将当前副作用函数压入栈中
+        effectStack.push(effectFn);
+        const result = fn();
+        // 在当前副作用函数执行完毕后，将当前副作用函数弹出栈，并把 activeEffect 还原为之前的值
+        effectStack.pop();
+        activeEffect = effectStack[effectStack.length - 1];
+        return result;
+      }
+      // 将 options 挂载到 effectFn 上
+      effectFn.options = options;
+      // activeEffect.deps 用来存储所有与该副作用函数相关联的依赖集合
+      effectFn.deps = [];
+      // 只有 非lazy 的时候，才执行
+      if (!options.lazy) {
+        // 执行副作用函数
+        effectFn();
+      }
+      // 将副作用函数作为返回值返回
+      return effectFn
+    }
+
+    // 在 get 拦截函数内调用 track 函数追踪变化
+    function track(target, key) {
+      // 不存在副作用函数，直接返回
+      if (!activeEffect) return
+      // 根据 target 从桶中取出 depsMap，它也是一个 Map 类型：key => effects
+      let depsMap = bucket.get(target);
+      if (!depsMap) {
+        // 如果 depsMap 不存在，那么新建一个 Map 并于 target 关联
+        bucket.set(target, (depsMap = new Map()));
+      }
+      // 根据 key 从 depsMap 中取得 deps，他是一个 Set 类型
+      // 其中储存着所有与 key 相关的副作用函数 effects
+      let deps = depsMap.get(key);
+      if (!deps) {
+        // 如果 deps 不存在，同样新建一个 Set 并与 key 关联
+        depsMap.set(key, (deps = new Set()));
+      }
+      // 最后将当前激活的副作用函数添加到 桶 里
+      deps.add(activeEffect);
+      // deps 就是一个与当前副作用函数存在联系的依赖集合
+      // 将其添加到 activeEffect.deps 数组中
+      activeEffect.deps.push(deps);
+    }
+
+    // 在 set 拦截函数内调用 trigger 函数触发变化
+    function trigger(target, key) {
+      // 根据 target 从桶中取得 depsMap，他是 key => effects
+      const depsMap = bucket.get(target);
+      if (!depsMap) return
+      // 根据 key 取得所有副作用函数 effects
+      const effects = depsMap.get(key);
+      // 新增一个等价的 Set，避免无限循环执行
+      const effectsToRun = new Set();
+      effects && effects.forEach(effectFn => {
+        // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，
+        // 则不触发执行
+        if (effectFn !== activeEffect) {
+          effectsToRun.add(effectFn);
+        }
+      })
+      // 执行副作用函数
+      effectsToRun.forEach(effectFn => {
+        // 如果一个副作用函数存在调度器，则调用该调度器，并将副作用函数作为参数传递
+        if (effectFn.options.scheduler) {
+          effectFn.options.scheduler(effectFn);
+        } else {
+          // 否则直接执行副作用函数
+          effectFn();
+        }
+      });
+      // effects && effects.forEach(fn => fn());
+    }
+
+    // 对数据的代理
+    const obj = new Proxy(data, {
+      // 拦截读取操作
+      get(target, key) {
+        // 将副作用函数 activeEffect 添加到储存副作用函数的桶中
+        track(target, key);
+        return target[key]
+      },
+      // 拦截设置操作
+      set(target, key, val) {
+        target[key] = val;
+        // 将副作用函数从桶里取出并执行
+        trigger(target, key);
+      }
+    })
+
+    function computed(fn) {
+      // value 用来缓存上一次计算的值
+      let value;
+      // dirty 标志，用来标识是否需要重新计算，为 true 则意味着‘脏’，需要计算
+      let dirty = true;
+      // 把 fn 作为副作用函数，创建一个 lazy 的 effect
+      const effectFn = effect(fn, {
+        lazy: true,
+        // 添加调度器，在调度器中将 dirty 重置 true
+        scheduler() {
+          dirty = true;
+          // 当计算属性依赖的响应式数据变化时，手动调用 trigger 函数触发响应
+          trigger(obj, 'value');
+        }
+      });
+      const obj = {
+        // 当读取 value 时才执行 effectFn
+        get value() {
+          // 只有‘脏’时才计算值，并将得到的值缓存到 value 中
+          if (dirty) {
+            value = effectFn();
+            // 将 dirty 设置为 false，下一次访问直接使用缓存到 value 中的值
+            dirty = false;
+          }
+          // 当读取 value 时，手动调用 track 函数进行追踪
+          track(obj, 'value');
+          return value;
+        }
+      }
+      return obj
+    }
+
+    function traverse(value, seen = new Set()) {
+      // 如果要读取的数据是原始值 或者已经被读取过了 那么什么都不做
+      if (typeof value != "object" || value === null || seen.has(value)) return
+      // 将数据添加到 seen 中，代表遍历的读取过了，避免循环引用引起的死循环
+      seen.add(value);
+      // 暂时不考虑数组及其他结构
+      // 假设 value 是一个对象，读取每一个值，递归调用 traverse 进行处理
+      for (const key in value) {
+        traverse(value[key], seen);
+      }
+      return value
+    }
+
+    // watch 函数接收两个参数，source 是响应式数据，cb 是回调函数
+    function watch(source, cb, options = {}) {
+      // 定义 getter
+      let getter;
+      // 如果 source 是函数，说明用户传递的是 getter, 所以直接把 source 赋值给 getter
+      if (typeof source === 'function') {
+        getter = source;
+      } else {
+        // 否则继续  调用 traverse 递归的读取
+        getter = () => traverse(source);
+      }
+      // 定义旧值与新值
+      let oldValue, newValue;
+
+      // 提取 scheduler 调度函数为一个独立的 job 函数
+      const job = () => {
+        newValue = effectFn();
+        cb(newValue, oldValue);
+        oldValue = newValue;
+      }
+
+      // 注册副作用函数，开启 lazy 函数，并把返回值储存到  effectFn 中以便后续手动调用
+      const effectFn = effect(
+        () => getter(),
+        {
+          lazy: true,
+          // 使用 job 函数作为调度器函数
+          scheduler: job
+        }
+      )
+
+      if (options.immediate) {
+        // 当 immediate 为 true 时立即执行 job，从而触发回调执行
+        job();
+      } else {
+        // 手动调用副作用函数，拿到的值就是旧值
+        oldValue = effectFn();
+      }
+    }
+
+    watch(
+      () => obj.count,
+      (nv, ov) => {
+        console.log('默认执行。。。。');
+      },
+      {
+        immediate: true
+      }
+    )
+    // obj.count += 100;
+  </script>
+</body>
+
+</html>

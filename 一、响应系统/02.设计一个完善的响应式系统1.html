@@ -5,12 +5,17 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>4.3设计一个完善的响应式系统</title>
+  <title>设计一个完善的响应式系统</title>
 </head>
 
 <body>
   <div id="app"></div>
+  <div id="app2"></div>
   <script>
+    /*
+      核心：增加‘副作用函数’注册机制，无需关注副作用函数的收集
+    */
+
     // 储存副作用函数
     const bucket = new Set();
     const data = { text: 'hello world!' };
@@ -50,8 +55,15 @@
     effect(
       // 一个匿名的副作用函数
       () => {
-        console.log('run count');
+        console.log('app');
         document.querySelector('#app').innerText = obj.text;
+      }
+    )
+
+    effect(
+      () => {
+        console.log('app2');
+        document.querySelector('#app2').innerText = obj.text;
       }
     )
 

@@ -5,12 +5,18 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>4.3设计一个完善的响应式系统</title>
+  <title>设计一个完善的响应式系统</title>
 </head>
 
 <body>
+  <h4>WeakMap => object => Map => key => Set</h4>
   <div id="app"></div>
+  <img width="500" src="./images/WX20230628-230413@2x.png" alt="">
   <script>
+    /*
+      每一个属性关联自己对应的副作用函数集合，避免其他属性误触发。
+      性能得到提升，weakMap的存在避免了内存被占满
+    */
     // 储存副作用函数
     const bucket = new WeakMap();
     const data = { text: 'hello world!' };

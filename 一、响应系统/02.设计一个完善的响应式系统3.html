@@ -11,6 +11,10 @@
 <body>
   <div id="app"></div>
   <script>
+    /*
+      track：追踪属性的变化。收集副作用函数
+      trigger：实时更新属性的变化。执行副作用函数
+    */
     // 储存副作用函数
     const bucket = new WeakMap();
     const data = { text: 'hello world!' };
@@ -72,8 +76,6 @@
         trigger(target, key);
       }
     })
-
-
 
     // 注册一个匿名副作用函数
     effect(
