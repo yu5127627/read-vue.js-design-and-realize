@@ -5,26 +5,27 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>4.4遗留的副作用函数</title>
+  <title>Reflect.*存在的意义</title>
 </head>
 
 <body>
   <div id="app"></div>
   <script>
-    /*
-     副作用函数：即清除收集副作用函数的 deps 依赖合集。 
-     // deps是一个储存多个 Set() [Set(),Set(),Set()] 集合的数组
-    */
     // 储存副作用函数
     const bucket = new WeakMap();
-    const data = { text: 'hello world!', ok: true };
+    const data = {
+      foo: 1,
+      get bar() {
+        // 这里的 this 随代理对象而改变
+        return this.foo
+      }
+    };
 
     // 清除遗留的副作用函数
     function cleanup(effectFn) {
       // 遍历 effectFn.deps 数组
       for (let i = 0; i < effectFn.deps.length; i++) {
-        // deps 是与该副作用函数关联的依赖集合
-        // deps 每一项都是一个 Set 列表
+        // deps 是依赖集合
         const deps = effectFn.deps[i];
         // 将 effectFn 从依赖集合中移除
         deps.delete(effectFn);
@@ -35,25 +36,40 @@
 
     // 用一个全局变量储存被注册的副作用函数
     let activeEffect;
+    // effect 栈
+    const effectStack = [];
     // effect 函数用于注册副作用函数
-    function effect(fn) {
+    function effect(fn, options = {}) {
       const effectFn = () => {
         // 调用 cleanup 函数完成清除工作
         cleanup(effectFn);
         // 当 effectFn 执行时，将其设置为当前激活的副作用函数
         activeEffect = effectFn;
-        fn();
+        // 在调用副作用函数之前将当前副作用函数压入栈中
+        effectStack.push(effectFn);
+        const result = fn();
+        // 在当前副作用函数执行完毕后，将当前副作用函数弹出栈，并把 activeEffect 还原为之前的值
+        effectStack.pop();
+        activeEffect = effectStack[effectStack.length - 1];
+        return result;
       }
+      // 将 options 挂载到 effectFn 上
+      effectFn.options = options;
       // activeEffect.deps 用来存储所有与该副作用函数相关联的依赖集合
       effectFn.deps = [];
-      // 执行副作用函数
-      effectFn();
+      // 只有 非lazy 的时候，才执行
+      if (!options.lazy) {
+        // 执行副作用函数
+        effectFn();
+      }
+      // 将副作用函数作为返回值返回
+      return effectFn
     }
 
     // 在 get 拦截函数内调用 track 函数追踪变化
     function track(target, key) {
-      // 不存在副作用函数，直接返回值
-      if (!activeEffect) return target[key]
+      // 不存在副作用函数，直接返回
+      if (!activeEffect) return
       // 根据 target 从桶中取出 depsMap，它也是一个 Map 类型：key => effects
       let depsMap = bucket.get(target);
       if (!depsMap) {
@@ -82,40 +98,48 @@
       // 根据 key 取得所有副作用函数 effects
       const effects = depsMap.get(key);
       // 新增一个等价的 Set，避免无限循环执行
-      const effectsToRun = new Set(effects);
+      const effectsToRun = new Set();
+      effects && effects.forEach(effectFn => {
+        // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，
+        // 则不触发执行
+        if (effectFn !== activeEffect) {
+          effectsToRun.add(effectFn);
+        }
+      })
       // 执行副作用函数
-      effectsToRun.forEach(effectFn => effectFn());
+      effectsToRun.forEach(effectFn => {
+        // 如果一个副作用函数存在调度器，则调用该调度器，并将副作用函数作为参数传递
+        if (effectFn.options.scheduler) {
+          effectFn.options.scheduler(effectFn);
+        } else {
+          // 否则直接执行副作用函数
+          effectFn();
+        }
+      });
       // effects && effects.forEach(fn => fn());
     }
 
     // 对数据的代理
     const obj = new Proxy(data, {
       // 拦截读取操作
-      get(target, key) {
+      // receiver: 代表谁在读取属性
+      get(target, key, receiver) {
         // 将副作用函数 activeEffect 添加到储存副作用函数的桶中
         track(target, key);
-        return target[key]
+        return Reflect.get(target, key, receiver)
       },
       // 拦截设置操作
       set(target, key, val) {
         target[key] = val;
         // 将副作用函数从桶里取出并执行
         trigger(target, key);
-      }
+      },
     })
 
-    // 注册一个匿名副作用函数
-    effect(
-      // 一个匿名的副作用函数
-      () => {
-        console.log('run count');
-        document.querySelector('#app').innerText = obj.ok ? obj.text : 'not';
-      }
-    )
-
-    setTimeout(() => {
-      obj.ok = false;
-    }, 1000);
+    effect(() => {
+      console.log(obj.bar);   // 代理对象 obj 在读取 bar 属性
+    })
+    obj.foo++
   </script>
 </body>
 

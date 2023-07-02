@@ -10,10 +10,17 @@
 
 <body>
   <div id="app"></div>
+  <script src="../logger.js"></script>
   <script>
     /*
       track：追踪属性的变化。收集副作用函数
       trigger：实时更新属性的变化。执行副作用函数
+    */
+    /*
+     1.建立一个数据的 proxy 代理
+     2.注册一个副作用函数，此后所有代理数据的操作都在副作用函数之中
+     3.读取代理数据时同步触发副作用函数的收集
+     4.更新代理数据时同步触发副作用函数的执行
     */
     // 储存副作用函数
     const bucket = new WeakMap();

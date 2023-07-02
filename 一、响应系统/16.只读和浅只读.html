@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>只读和浅只读</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../logger.js"></script>
+  <script>
+    // 储存副作用函数
+    const bucket = new WeakMap();
+    const ITERATE_KEY = Symbol();
+    const data = {
+      count: 1,
+      foo: { bar: 1 },
+    };
+
+    // 清除遗留的副作用函数
+    function cleanup(effectFn) {
+      // 遍历 effectFn.deps 数组
+      for (let i = 0; i < effectFn.deps.length; i++) {
+        // deps 是依赖集合
+        const deps = effectFn.deps[i];
+        // 将 effectFn 从依赖集合中移除
+        deps.delete(effectFn);
+      }
+      // 最后需要重置 effectFn.deps 数组
+      effectFn.deps.length = 0;
+    }
+
+    // 用一个全局变量储存被注册的副作用函数
+    let activeEffect;
+    // effect 栈
+    const effectStack = [];
+    // effect 函数用于注册副作用函数
+    function effect(fn, options = {}) {
+      const effectFn = () => {
+        // 调用 cleanup 函数完成清除工作
+        cleanup(effectFn);
+        // 当 effectFn 执行时，将其设置为当前激活的副作用函数
+        activeEffect = effectFn;
+        // 在调用副作用函数之前将当前副作用函数压入栈中
+        effectStack.push(effectFn);
+        const result = fn();
+        // 在当前副作用函数执行完毕后，将当前副作用函数弹出栈，并把 activeEffect 还原为之前的值
+        effectStack.pop();
+        activeEffect = effectStack[effectStack.length - 1];
+        return result;
+      }
+      // 将 options 挂载到 effectFn 上
+      effectFn.options = options;
+      // activeEffect.deps 用来存储所有与该副作用函数相关联的依赖集合
+      effectFn.deps = [];
+      // 只有 非lazy 的时候，才执行
+      if (!options.lazy) {
+        // 执行副作用函数
+        effectFn();
+      }
+      // 将副作用函数作为返回值返回
+      return effectFn
+    }
+
+    // 在 get 拦截函数内调用 track 函数追踪变化
+    function track(target, key) {
+      // 不存在副作用函数，直接返回
+      if (!activeEffect) return
+      // 根据 target 从桶中取出 depsMap，它也是一个 Map 类型：key => effects
+      let depsMap = bucket.get(target);
+      if (!depsMap) {
+        // 如果 depsMap 不存在，那么新建一个 Map 并于 target 关联
+        bucket.set(target, (depsMap = new Map()));
+      }
+      // 根据 key 从 depsMap 中取得 deps，他是一个 Set 类型
+      // 其中储存着所有与 key 相关的副作用函数 effects
+      let deps = depsMap.get(key);
+      if (!deps) {
+        // 如果 deps 不存在，同样新建一个 Set 并与 key 关联
+        depsMap.set(key, (deps = new Set()));
+      }
+      // 最后将当前激活的副作用函数添加到 桶 里
+      deps.add(activeEffect);
+      // deps 就是一个与当前副作用函数存在联系的依赖集合
+      // 将其添加到 activeEffect.deps 数组中
+      activeEffect.deps.push(deps);
+    }
+
+    // 在 set 拦截函数内调用 trigger 函数触发变化
+    function trigger(target, key, type) {
+      // 根据 target 从桶中取得 depsMap，他是 key => effects
+      const depsMap = bucket.get(target);
+      if (!depsMap) return
+      // 根据 key 取得所有副作用函数 effects
+      const effects = depsMap.get(key);
+
+      // 新增一个等价的 Set，避免无限循环执行
+      const effectsToRun = new Set();
+      // 将与 key 关联的副作用函数添加到 effectsToRun
+      effects && effects.forEach(effectFn => {
+        // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，
+        // 则不触发执行
+        if (effectFn !== activeEffect) {
+          effectsToRun.add(effectFn);
+        }
+      })
+      // 当操作类型为 'ADD' 或 'DELETE' 时，需要触发与 ITERATE_KEY 相关联的副作用函数重新执行
+      if (type === 'ADD' || type === 'DELETE') {
+        // 取得与 ITERATE_KEY 相关的副作用函数
+        const iterateEffects = depsMap.get(ITERATE_KEY);
+        // 将与 ITERATE_KEY 关联的副作用函数添加到 effectsToRun
+        iterateEffects && iterateEffects.forEach(effectFn => {
+          // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，
+          // 则不触发执行
+          if (effectFn !== activeEffect) {
+            effectsToRun.add(effectFn);
+          }
+        })
+      }
+
+      // 执行副作用函数
+      effectsToRun.forEach(effectFn => {
+        // 如果一个副作用函数存在调度器，则调用该调度器，并将副作用函数作为参数传递
+        if (effectFn.options.scheduler) {
+          effectFn.options.scheduler(effectFn);
+        } else {
+          // 否则直接执行副作用函数
+          effectFn();
+        }
+      });
+    }
+
+    // 封装响应式函数，区分深响应和浅响应，区分深只读和浅只读
+    function createReactive(obj, isShallow = false, isReadonly = false) {
+      return new Proxy(obj, {
+        // 拦截 属性 的读取
+        // receiver: 代表谁在读取属性
+        get(target, key, receiver) {
+          // 代理对象可以通过 raw 属性访问原始数据
+          if (key === 'raw') {
+            return target
+          }
+          // 非只读的时候才需要建立起响应联系
+          if (!isReadonly) {
+            // 将副作用函数 activeEffect 添加到储存副作用函数的桶中
+            track(target, key);
+          }
+          const result = Reflect.get(target, key, receiver);
+          // 浅响应 直接返回原始值
+          if (isShallow) return result
+          // 如果是对象形式递归代理
+          if (typeof result === 'object' && result !== null) {
+            // 如果数据为只读，则调用 readonly 对值进行包装
+            return isReadonly ? readonly(result) : reactive(result)
+          }
+          return result
+        },
+        // 拦截设置操作
+        set(target, key, val, receiver) {
+          // 如果是只读的，则打印警告信息
+          if (isReadonly) {
+            console.log(`属性 ${key} 是只读的`);
+            return true
+          }
+          // 读取旧值
+          const oldVal = target[key];
+          // 区分属性是已有属性还是新属性
+          const type = Object.prototype.hasOwnProperty.call(target, key) ? 'SET' : 'ADD';
+          // 设置属性值
+          const result = Reflect.set(target, key, val, receiver);
+          // 判断 receiver 是否为 target 的代理对象
+          if (target === receiver.raw) {
+            // 比较新值与旧值，只有不同的时候才触发响应 && 旧值和新值都不是 NaN
+            if (oldVal !== val && (oldVal === oldVal || val === val)) {
+              // 将副作用函数从桶里取出并执行
+              trigger(target, key, type);
+            }
+          }
+          return result
+        },
+        // 拦截 删除 操作
+        deleteProperty(target, key) {
+          // 如果是只读的，则打印警告信息
+          if (isReadonly) {
+            console.warn(`属性 ${key} 是只读的`);
+            return true
+          }
+          // 检查要删除的属性是否是自己的属性
+          const hasKey = Object.prototype.hasOwnProperty.call(target, key);
+          const result = Reflect.deleteProperty(target, key);
+          if (result && hasKey) {
+            // 只有当被删除的属性是对象自己的属性并且成功删除时，才触发更新
+            trigger(target, key, 'DELETE');
+          }
+          return result
+        },
+        // 拦截 in 操作符
+        has(target, key) {
+          track(target, key);
+          return Reflect.has(target, key);
+        },
+        // 拦截 for in 循环操作
+        ownKeys(target) {
+          // 将副作用函数与 ITERATE_KEY 关联
+          track(target, ITERATE_KEY);
+          return Reflect.ownKeys(target);
+        }
+      })
+    }
+    // 深只读
+    function readonly(obj) {
+      return createReactive(obj, false, true);
+    }
+    // 浅只读
+    function shoallowReadonly(obj) {
+      return createReactive(obj, true, true);
+    }
+    // 深响应
+    function reactive(obj) {
+      return createReactive(obj);
+    }
+    // 浅响应
+    function shallowReactive(obj) {
+      return createReactive(obj, true);
+    }
+
+    const obj = readonly(data);
+    obj.foo.bar = 2;
+    const obj1 = shoallowReadonly(data);
+    obj1.count = 2;
+  </script>
+</body>
+
+</html>
