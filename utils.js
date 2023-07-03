@@ -5,6 +5,37 @@ const ITERATE_KEY = Symbol();
 let activeEffect;
 // effect 栈
 const effectStack = [];
+// 定义一个 Map 实例，储存原始对象到代理对象的映射
+const reactiveMap = new Map();
+// 一个标记变量，代表是否进行追踪。默认允许追踪
+let shouldTrack = true;
+const arrayInstrumentations = {};
+// 修改数据的查找方法
+['includes','indexOf','lastIndexOf'].forEach(method=>{
+  arrayInstrumentations[method] = function(...args) {
+    const originMethod = Array.prototype[method];
+    // this 是代理对象，先在代理对象中查找，将结果储存到 result 中
+    let result = originMethod.apply(this,args);
+    if(result===false) {
+      // result 为 false 说明没找到，通过 this.raw 拿到原始数组，再去其中查找，并更新 result 值
+      result = originMethod.apply(this.raw,args);
+    }
+    return result
+  }
+});
+// 修改数组隐式修改长度的方法
+['push','pop','shift','unshift','splice'].forEach(method => {
+    const originMethod = Array.prototype[method];
+    arrayInstrumentations[method] = function(...args) {
+      // 在调用原始方法之前，禁止追踪
+      shouldTrack = false;
+      // push 方法的默认行为
+      let result = originMethod.apply(this, args);
+      // 在调用原始方法之后，回复原先的习惯为，即允许追踪
+      shouldTrack = true;
+      return result
+    }
+});
 
 // 深只读
 function readonly(obj) {
@@ -16,7 +47,15 @@ function shoallowReadonly(obj) {
 }
 // 深响应
 function reactive(obj) {
-  return createReactive(obj);
+  // 优先通过原始对象 obj 寻找之前创建的代理对象
+  const existionProxy = reactiveMap.get(obj);
+  // 如果存在，直接返回已有的代理对象
+  if(existionProxy) return existionProxy
+  // 创建新的代理对象
+  const proxy = createReactive(obj);
+  // 储存到 Map 中，避免重复创建
+  reactiveMap.set(obj,proxy);
+  return proxy;
 }
 // 浅响应
 function shallowReactive(obj) {

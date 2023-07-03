@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>遍历数组</title>
+  <title>数组的查找方法</title>
 </head>
 
 <body>
@@ -13,8 +13,6 @@
   <script src="../logger.js"></script>
   <script src="../utils.js"></script>
   <script>
-    const data = ['foo', 1, 2, 3];
-
     // 在 get 拦截函数内调用 track 函数追踪变化
     function track(target, key) {
       // 不存在副作用函数，直接返回
@@ -120,6 +118,11 @@
           if (key === 'raw') {
             return target
           }
+          // 如果操作的目标对象是数组 并且 key 存在于 arrayInstrumentations 上
+          // 那么返回定义在 arrayInstrumentations 上的值
+          if(Array.isArray(target)&&arrayInstrumentations.hasOwnProperty(key)) {
+            return Reflect.get(arrayInstrumentations,key,receiver);
+          }
           // 非只读的时候才需要建立起响应联系
           // key 的类型是 symbol，不添加联系
           if (!isReadonly && typeof key !== "symbol") {
@@ -196,15 +199,8 @@
       })
     }
 
-    const arr = reactive(data);
-    effect(() => {
-      for (const key in arr) {
-        console.log(arr[key]);
-      }
-      console.log('----');
-    })
-    arr[1] = 'count';
-    arr.length = 1;
+    const arr = reactive([1,2]);
+    console.log(arr.includes(arr[0]));
   </script>
 </body>
 
