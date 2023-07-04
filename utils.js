@@ -1,6 +1,7 @@
 // 储存副作用函数
 const bucket = new WeakMap();
 const ITERATE_KEY = Symbol();
+const MAP_KEY_ITERATE_KEY = Symbol(); // .keys() 读取 key 的唯一值
 // 用一个全局变量储存被注册的副作用函数
 let activeEffect;
 // effect 栈
@@ -11,13 +12,85 @@ const reactiveMap = new Map();
 let shouldTrack = true;
 // 数组方法的重写
 const arrayInstrumentations = {};
-// Set 数据方法的重写
+// 迭代器方法的重写
+function iterationMethod() {
+  const target = this.raw;
+  const result = target[Symbol.iterator]();
+   // 将可代理的值转换为响应式数据
+  const wrap = (val) => typeof val === 'object' && val !== null ? reactive(val) : val;
+  track(target, ITERATE_KEY);
+  // 自定义返回的迭代器
+  return {
+    next() {
+      // 调用原始迭代器的 next 方法获取 value 和 done
+      const { value,done } = result.next();
+      return {
+        // 如果 value 不是 undefined,则对其进行包裹
+        value: value ? [wrap(value[0]), wrap(value[1])] : value,
+        done
+      }
+    },
+    [Symbol.iterator]() {
+      return this
+    }
+  }
+};
+// keys values 迭代器方法重写
+function valuesIterationMethod() {
+  const target = this.raw;
+  const result = target.values();
+  // 将可代理的值转换为响应式数据
+  const wrap = (val) => typeof val === 'object' ? reactive(val) : val;
+  track(target, ITERATE_KEY);
+  // 自定义返回的迭代器
+  return {
+    next() {
+      // 调用原始迭代器的 next 方法获取 value 和 done
+      const { value,done } = result.next();
+      return {
+        // 如果 value 不是 undefined,则对其进行包裹
+        value: wrap(value),
+        done
+      }
+    },
+    [Symbol.iterator]() {
+      return this
+    }
+  }
+}
+function keysIterationMethod() {
+  const target = this.raw;
+  const result = target.keys();
+  // 将可代理的值转换为响应式数据
+  const wrap = (val) => typeof val === 'object' ? reactive(val) : val;
+  track(target, MAP_KEY_ITERATE_KEY);
+  // 自定义返回的迭代器
+  return {
+    next() {
+      // 调用原始迭代器的 next 方法获取 value 和 done
+      const { value,done } = result.next();
+      return {
+        // 如果 value 不是 undefined,则对其进行包裹
+        value: wrap(value),
+        done
+      }
+    },
+    [Symbol.iterator]() {
+      return this
+    }
+  }
+}
+// Set Map 数据方法的重写
 const mutableInstrumentations = {
+  [Symbol.iterator]: iterationMethod,
+  entries: iterationMethod,
+  values: valuesIterationMethod,
+  keys: keysIterationMethod,
   forEach(callback, thisArg) {
-    // 将可代理的值转换为响应式数据
-    const wrap = val => typeof val === 'object' ? reactive(val) : val;
     const target = this.raw;
     track(target, ITERATE_KEY)
+     // 将可代理的值转换为响应式数据
+    const wrap = (val) => typeof val === 'object' ? reactive(val) : val;
     // 通过原始数据对象调用 forEach，并把 callback 传递过去
     target.forEach((v, k) => {
       // 通过 .call 调用 callback, 并传递 thisArg

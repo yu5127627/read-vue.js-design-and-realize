@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>代理 Set 和 Map</title>
+  <title>values和keys方法</title>
 </head>
 
 <body>
@@ -60,6 +60,19 @@
         // 取得与 ITERATE_KEY 相关的副作用函数
         const iterateEffects = depsMap.get(ITERATE_KEY);
         // 将与 ITERATE_KEY 关联的副作用函数添加到 effectsToRun
+        iterateEffects && iterateEffects.forEach(effectFn => {
+          // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，
+          // 则不触发执行
+          if (effectFn !== activeEffect) {
+            effectsToRun.add(effectFn);
+          }
+        })
+      }
+      // 当操作类型为 'ADD' 或 'DELETE' 时 && 数据类型为 Map 时，需要触发与 MAP_KEY_ITERATE_KEY 相关联的副作用函数重新执行
+      if ((type === 'ADD' || type === 'DELETE') && Object.prototype.toString.call(target) === '[object Map]') {
+        // 取得与 MAP_KEY_ITERATE_KEY 相关的副作用函数
+        const iterateEffects = depsMap.get(MAP_KEY_ITERATE_KEY);
+        // 将与 MAP_KEY_ITERATE_KEY 关联的副作用函数添加到 effectsToRun
         iterateEffects && iterateEffects.forEach(effectFn => {
           // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，
           // 则不触发执行
@@ -211,50 +224,26 @@
       })
     }
 
-    // let data = new Set([1,2,3]);
-    // const proxy = reactive(data);
-    // effect(()=>{
-    //   console.log(proxy.size)
-    // })
-    // proxy.add(11);
-    // proxy.delete(2)
-    // proxy.delete(1)
-
-    // let data = new Map([['key', 1]]);
-    // const proxy = reactive(data);
-    // effect(()=>{
-    //   console.log(proxy.get('key'));
-    // })
-    // proxy.set('key', 2);
-
-    // const key = { key: 1 };
-    // const value = new Set([1, 2, 3]);
-    // let data = new Map([
-    //   [key, value]
-    // ]);
-    // const proxy = reactive(data);
-    // effect(()=>{
-    // proxy.forEach(function(val,key) {
-    //   console.log(key,val);
-    // })
-    //   for (const key in proxy) {
-    //     console.log(key);
+    const data = new Map([
+      ['key1', 'value1'],
+      ['key2', 'value2'],
+    ]);
+    const proxy = reactive(data);
+    // effect(() => {
+    //   for (const val of proxy.values()) {
+    //     console.log(val);
     //   }
-    //   console.log('------');
     // })
-    // proxy.set({key:2},{val:2});
-    // proxy.get(key).delete(1)
+    // proxy.set('key3', 'value3')
 
-    const proxy = reactive(new Map([
-      ['key', 1]
-    ]));
     effect(() => {
-      proxy.forEach(function (value, key) {
-        console.log(value)
-      })
-      console.log('---');
+      for (const val of proxy.keys()) {
+        console.log(val);
+      }
+      console.log('------');
     })
-    proxy.set('key', 2);
+    proxy.set('key2', 'value3')
+    proxy.set('key3', 'value3')
   </script>
 </body>
 

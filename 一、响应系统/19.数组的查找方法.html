@@ -120,8 +120,8 @@
           }
           // 如果操作的目标对象是数组 并且 key 存在于 arrayInstrumentations 上
           // 那么返回定义在 arrayInstrumentations 上的值
-          if(Array.isArray(target)&&arrayInstrumentations.hasOwnProperty(key)) {
-            return Reflect.get(arrayInstrumentations,key,receiver);
+          if (Array.isArray(target) && arrayInstrumentations.hasOwnProperty(key)) {
+            return Reflect.get(arrayInstrumentations, key, receiver);
           }
           // 非只读的时候才需要建立起响应联系
           // key 的类型是 symbol，不添加联系
@@ -199,7 +199,7 @@
       })
     }
 
-    const arr = reactive([1,2]);
+    const arr = reactive([1, 2]);
     console.log(arr.includes(arr[0]));
   </script>
 </body>

@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>代理 Set 和 Map</title>
+  <title>迭代器方法</title>
 </head>
 
 <body>
@@ -211,50 +211,19 @@
       })
     }
 
-    // let data = new Set([1,2,3]);
-    // const proxy = reactive(data);
-    // effect(()=>{
-    //   console.log(proxy.size)
-    // })
-    // proxy.add(11);
-    // proxy.delete(2)
-    // proxy.delete(1)
-
-    // let data = new Map([['key', 1]]);
-    // const proxy = reactive(data);
-    // effect(()=>{
-    //   console.log(proxy.get('key'));
-    // })
-    // proxy.set('key', 2);
-
-    // const key = { key: 1 };
-    // const value = new Set([1, 2, 3]);
-    // let data = new Map([
-    //   [key, value]
-    // ]);
-    // const proxy = reactive(data);
-    // effect(()=>{
-    // proxy.forEach(function(val,key) {
-    //   console.log(key,val);
-    // })
-    //   for (const key in proxy) {
-    //     console.log(key);
-    //   }
-    //   console.log('------');
-    // })
-    // proxy.set({key:2},{val:2});
-    // proxy.get(key).delete(1)
-
-    const proxy = reactive(new Map([
-      ['key', 1]
-    ]));
+    const data = new Map([
+      ['key1', 'value1'],
+      ['key2', 'value2'],
+    ]);
+    console.log(data);
+    const proxy = reactive(data);
+    console.log(proxy);
     effect(() => {
-      proxy.forEach(function (value, key) {
-        console.log(value)
-      })
-      console.log('---');
+      for (const [k, v] of proxy.entries()) {
+        console.log(k, v);
+      }
     })
-    proxy.set('key', 2);
+    proxy.set('key3', 'value3')
   </script>
 </body>
 
