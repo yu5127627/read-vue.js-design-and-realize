@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>卸载操作</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../logger.js"></script>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script>
+    elementApi.patchProps = function (el, key, prevValue, nextValue) {
+      // 对 class 进行特殊处理
+      if (key === 'class') {
+        el.className = normalizeClass(nextValue) || '';
+      } else if (shouldSetAsProps(el, key, nextValue)) {
+        // 判断是否应该作为 DOM Properties 设置
+        const type = typeof el[key];
+        if (type === 'boolean' && nextValue === '') {
+          el[key] = true;
+        } else {
+          el[key] = nextValue;
+        }
+      } else {
+        // 如果要设置的属性没有对应的 dom properties，则使用 setAttribute 设置属性
+        el.setAttribute(key, nextValue);
+      }
+    }
+
+    function createRenddderer(options) {
+      const { createElement, setElementText, patchProps, insert } = options;
+
+      // 挂载 vnode 到 container
+      function mountElement(vnode, container) {
+        const el = vnode.el = createElement(vnode.type);
+
+        if (typeof vnode.children === 'string') {
+          setElementText(el, vnode.children);
+        } else if (Array.isArray(vnode.children)) {
+          // 多个子节点，遍历用 patch 挂载它们
+          vnode.children.forEach(child => {
+            patch(null, child, el);
+          })
+        }
+
+        // 处理 props
+        if (vnode.props) {
+          for (const key in vnode.props) {
+            patchProps(el, key, null, vnode.props[key]);
+          }
+        }
+
+        insert(el, container);
+      }
+
+      // 卸载 vnode
+      function unmount(vnode) {
+        const parent = vnode.el.parentNode;
+        if (parent) {
+          parent.removeChild(vnode.el);
+        }
+      }
+
+      // 挂载 or 打补丁 到 container
+      function patch(oldVnode, newVnode, container) {
+        // 不存在 oldVnode，意味着挂载，调用 mountElement() 完成挂载
+        if (!oldVnode) {
+          mountElement(newVnode, container);
+        } else {
+          // oldVnode 存在，意味着打补丁，即更新内容
+        }
+      }
+
+      // 渲染 vnode 到 container
+      function render(vnode, container) {
+        if (vnode) {
+          // 新 vnode 存在，将其与旧 vnode 一起传递给 patch 函数，进行更新
+          patch(container._vnode, vnode, container);
+        } else {
+          if (container._vnode) {
+            // 旧 vnode 存在，且新 vnode 不存在，说明是卸载 unmount 操作
+            unmount(container._vnode);
+          }
+        }
+        // 储存 vnode 
+        container._vnode = vnode;
+      }
+
+      function hydrate(vnode, container) { }
+
+      return {
+        render,
+        hydrate
+      }
+    }
+
+    const renderer = createRenddderer(elementApi);
+    const vnode = {
+      type: 'div',
+      props: {
+        id: 'foo',
+        class: ['foo bar', { list: true }]
+      },
+      children: [
+        {
+          type: 'p',
+          children: 'hello'
+        },
+        {
+          type: 'span',
+          children: 'world!'
+        }
+      ]
+    }
+    renderer.render(vnode, document.querySelector('#app'));
+    setTimeout(() => {
+      renderer.render(null, document.querySelector('#app'));
+    }, 1000)
+
+  </script>
+</body>
+
+</html>
