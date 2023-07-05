@@ -22,8 +22,8 @@ module.exports = {
     sourceType: 'module'
   },
   rules: {
-    semi: true,
-    "semi-spacing":1,
+    semi: [1, 'always'],
+    "semi-spacing": 1,
     "space-unary-ops": 2,
     "space-unary-ops": true,
     "space-before-function-paren": 1,

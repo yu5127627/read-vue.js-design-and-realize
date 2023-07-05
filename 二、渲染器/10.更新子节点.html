@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>更新子节点</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <!-- <script src="../logger.js"></script> -->
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script>
+    function createRenddderer(options) {
+      const { createElement, setElementText, patchProps, insert } = options;
+
+      // 挂载 vnode 到 container
+      function mountElement(vnode, container) {
+        const el = vnode.el = createElement(vnode.type);
+
+        if (typeof vnode.children === 'string') {
+          setElementText(el, vnode.children);
+        } else if (Array.isArray(vnode.children)) {
+          // 多个子节点，遍历用 patch 挂载它们
+          vnode.children.forEach(child => {
+            patch(null, child, el);
+          })
+        }
+
+        // 处理 props
+        if (vnode.props) {
+          for (const key in vnode.props) {
+            patchProps(el, key, null, vnode.props[key]);
+          }
+        }
+
+        insert(el, container);
+      }
+
+      // 更新 vnode-children
+      function patchChildren(oNode, nNode, container) {
+        // 判断子节点的类型是否为文本节点
+        if (typeof nNode.children === "string") {
+          // 旧子节点的类型有三种可能：没有子节点、文本子节点以及一组子节点
+          // 只有当旧子节点为一组子节点时，才需要逐个卸载，其他情况下的什么都不需要做
+          if (Array.isArray(oNode.children)) {
+            oNode.children.forEach(v => unmount(v));
+          }
+          // 最后将新的文本节点内容设置给容器元素
+          setElementText(container, nNode.children);
+        } else if (Array.isArray(nNode.children)) {
+          // 说明新子节点是一组子节点
+          // 判断旧子节点是否也是一组子节点
+          if (Array.isArray(oNode.children)) {
+            // 运行到此处 说明新旧子节点都是一组子节点。
+            // 此处开始核心的 diff 算法
+
+            // 旧节点全部卸载
+            oNode.children.forEach(v => unmount(v));
+            // 新节点全部挂载
+            nNode.children.forEach(v => patch(null, v, container));
+
+          } else {
+            // 旧子节点要么是文本子节点 要么不存在
+            // 但无论哪种情况，我们只需要将容器清空，然后将新的一组子节点逐个挂载
+            setElementText(container, '');
+            nNode.children.forEach(c => patch(null, c, container))
+          }
+        } else {
+          // 新子节点不存在，旧子节点是一组子节点，只需逐个卸载即可
+          if (Array.isArray(oNode.children)) {
+            oNode.children.forEach(v => unmount(v));
+          } else if (typeof oNode.children === 'string') {
+            // 旧子节点是文本子节点，清空内容即可
+            setElementText(container, '');
+          }
+          // 没有子节点 没有操作
+        }
+      }
+
+      // 更新 vnode
+      function patchElement(oNode, nNode) {
+        const el = nNode.el = oNode.el;
+        const oldProps = oNode.props;
+        const newProps = nNode.props;
+        // 更新 props 为新 value
+        for (const key in newProps) {
+          if (newProps[key] !== oldProps[key]) {
+            patchProps(el, key, oldProps[key], newProps[key]);
+          }
+        }
+        // 更新 props 为 null
+        for (const key in oldProps) {
+          if (!(key in newProps)) {
+            patchProps(el, key, oldProps[key], null);
+          }
+        }
+        // 更新 children
+        patchChildren(oNode, nNode, el);
+      }
+
+      // 卸载 vnode
+      function unmount(vnode) {
+        const parent = vnode.el.parentNode;
+        if (parent) {
+          parent.removeChild(vnode.el);
+        }
+      }
+
+      // 挂载 or 打补丁 到 container
+      function patch(oNode, nNode, container) {
+        // 如果 onode  存在，对比 onode 和 nnode 的类型
+        if (oNode && oNode.type !== nNode.type) {
+          // 如果新旧 vnode 的类型不同，则直接将旧 vnode 卸载
+          unmount(oNode);
+          oNode = null;
+        }
+        // 运行到此处 说明新旧节点类型相同
+        const { type } = nNode;
+        if (typeof type === 'string') {
+          // 不存在 oNode，意味着挂载，调用 mountElement() 完成挂载
+          if (!oNode) {
+            mountElement(nNode, container);
+          } else {
+            // oNode 存在，意味着打补丁，即更新内容
+            patchElement(oNode, nNode);
+          }
+        } else if (typeof type === 'object') {
+          // 如果 nNode.type 的值的类型是对象，则它描述的是组件
+        } else if (type === 'xxx') {
+          // 处理其他类型的 vnode
+        }
+      }
+
+      // 渲染 vnode 到 container
+      function render(vnode, container) {
+        if (vnode) {
+          // 新 vnode 存在，将其与旧 vnode 一起传递给 patch 函数，进行更新
+          patch(container._vnode, vnode, container);
+        } else {
+          if (container._vnode) {
+            // 旧 vnode 存在，且新 vnode 不存在，说明是卸载 unmount 操作
+            unmount(container._vnode);
+          }
+        }
+        // 储存 vnode 
+        container._vnode = vnode;
+      }
+
+      function hydrate(vnode, container) { }
+
+      return {
+        render,
+        hydrate
+      }
+    }
+
+    const renderer = createRenddderer(elementApi);
+
+    const bol = ref(false);
+
+    effect(() => {
+      let vnode = {
+        type: 'div',
+        props: bol.value ? {
+          onClick: () => { console.log('parent click') }
+        } : {},
+        children: [
+          {
+            type: 'p',
+            props: {
+              onClick: () => {
+                bol.value = true;
+                console.log('----', bol.value);
+              }
+            },
+            children: `${bol.value ? 'hello world!' : 'hello vue3!'}`
+          }
+        ]
+      }
+      renderer.render(vnode, document.querySelector('#app'));
+    })
+
+  </script>
+</body>
+
+</html>
