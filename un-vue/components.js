@@ -1,3 +1,11 @@
+// 全局变量 储存当前正在被初始化的实例
+let currentInstance = null;
+
+// 注册全局初始化的实例
+function setCurrentInstance(instance) {
+  currentInstance = instance;
+}
+
 function renderComponent(oNode, nNode, container, anchor) {
   if (!oNode) {
     // 挂载组件

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>插槽的工作原理与实现</title>
+  <title>注册生命周期</title>
 </head>
 
 <body>
@@ -14,6 +14,13 @@
   <script src="../un-vue/render.js"></script>
   <script src="../un-vue/components.js"></script>
   <script>
+    function onMounted(fn) {
+      if (currentInstance) {
+        currentInstance.mounted.push(fn);
+      } else {
+        console.error('onMounted 函数只能在 setup 中调用');
+      }
+    }
     // 挂载组件
     function mountComponent(vnode, container, anchor) {
       // 获取组件选项对象
@@ -37,7 +44,8 @@
         props: shallowReactive(props),  // 将解析出的 porps 转换为浅响应式并储存到组件实例
         isMounted: false,   // 标识组件是否被挂载，初始值为 false
         subTree: null,   // 组件渲染的 vnode
-        slots   // 将插槽添加到组件实例上
+        slots,   // 将插槽添加到组件实例上
+        mounted: [] // 储存通过 onMounted 函数注册的生命周期钩子函数
       }
 
       function emit(event, ...payload) {
@@ -52,8 +60,12 @@
 
       // setup 上下文内容
       const setupContext = { attrs, emit, slots };
+      // 调用 setup 之前，设置当前组件实例
+      setCurrentInstance(instance);
       // 获取 setup 返回值，props 为只读作为第一个参数传递，setupContext 作为第二个参数传递
       const setupResult = setup ? setup(shallowReadonly(instance.props), setupContext) : null;
+      // 调用 setup 之后，重置当前组件实例
+      setCurrentInstance(null);
       // 用作储存 setup 返回的数据
       let setupState = null;
       // 如果 setup 函数的返回值是函数，则将其作为渲染函数
@@ -133,8 +145,9 @@
 
           // 4.此处调用 mounted 钩子
           mounted && mounted.call(renderContext);
+          // 遍历 instance.mounted 数组并逐个执行
+          instance.mounted && instance.mounted.forEach(hook => hook.call(renderContext));
         } else {
-
           // 5.此处调用 beforeUpdate 钩子
           beforeUpdate && beforeUpdate.call(renderContext);
 
@@ -156,42 +169,25 @@
       // 组件名称 可选
       name: 'MyComponent',
       setup(props, { emit }) {
-        return {
+        let count = ref(0);
 
+        onMounted(() => {
+          setInterval(() => {
+            count.value++;
+          }, 1000);
+        })
+
+        return () => {
+          return {
+            type: 'div',
+            children: `${count.value}`
+          }
         }
       },
-      render() {
-        return [
-          {
-            type: 'header',
-            children: [this.$slots.header()]
-          },
-          {
-            type: 'body',
-            children: [this.$slots.body()]
-          },
-          {
-            type: 'footer',
-            children: [this.$slots.footer()]
-          }
-        ]
-      }
     };
 
     const vnode = {
-      type: MyComponent,
-      children: {
-        header() {
-          return { type: 'h1', children: 'header' }
-        },
-        body() {
-          return { type: 'section', children: 'body' }
-        },
-        footer() {
-          return { type: 'p', children: 'footer' }
-        }
-      }
-
+      type: MyComponent
     }
 
     const renderer = createRenddderer(elementApi);
