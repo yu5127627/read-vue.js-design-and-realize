@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>渲染组件</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script>
+    function renderComponent(oNode, nNode, container, anchor) {
+      if (!oNode) {
+        // 挂载组件
+        mountComponent(nNode, container, anchor);
+      } else {
+        // 更新组件
+        patchComponent(oNode, nNode, anchor);
+      }
+    }
+
+    function mountComponent(vnode, container, anchor) {
+      // 获取组件选项对象
+      const componentOptions = vnode.type;
+      // 获取组件的 render 函数
+      const { render } = componentOptions;
+      // 执行渲染函数，获取组件要渲染的内容，即 render 函数返回的 vnode
+      const subTree = render();
+      //  挂载 vnode
+      patch(null, subTree, container, anchor)
+    }
+
+    const MyComponent = {
+      // 组件名称 可选
+      name: 'MyComponent',
+      // 渲染函数。其返回值必须为虚拟 DOM
+      render() {
+        return {
+          type: 'div',
+          children: 'hello world!'
+        }
+      }
+    };
+
+    const vnode = {
+      type: MyComponent
+    }
+
+    const renderer = createRenddderer(elementApi);
+    renderer.render(vnode, document.querySelector('#app'));
+  </script>
+</body>
+
+</html>

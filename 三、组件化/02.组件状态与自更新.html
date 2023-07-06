@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>组件状态与自更新</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script src="../un-vue/utils.js"></script>
+  <script>
+    function renderComponent(oNode, nNode, container, anchor) {
+      if (!oNode) {
+        // 挂载组件
+        mountComponent(nNode, container, anchor);
+      } else {
+        // 更新组件
+        patchComponent(oNode, nNode, anchor);
+      }
+    }
+
+    function mountComponent(vnode, container, anchor) {
+      // 获取组件选项对象
+      const componentOptions = vnode.type;
+      // 获取组件的 render 函数
+      const { render, data } = componentOptions;
+      // 获取组件数据，并转换为响应式数据
+      const state = reactive(data());
+      console.log(state);
+      // 自更新：将组件的 render 函数调用设置为副作用函数
+      effect(() => {
+        // 执行渲染函数，获取组件要渲染的内容，即 render 函数返回的 vnode
+        const subTree = render.call(state, state);
+        //  挂载 vnode
+        patch(null, subTree, container, anchor)
+      }, {
+        // 指定该副作用函数的调度器为 queueJob
+        scheduler: queueJob
+      })
+    }
+
+    const MyComponent = {
+      // 组件名称 可选
+      name: 'MyComponent',
+      // data 函数定义组件自身的状态
+      data() {
+        return {
+          foo: 'hello world'
+        }
+      },
+      // 渲染函数。其返回值必须为虚拟 DOM
+      render() {
+        return {
+          type: 'div',
+          children: `foo 的值是：${this.foo}`
+        }
+      }
+    };
+
+    const vnode = {
+      type: MyComponent
+    }
+
+    const renderer = createRenddderer(elementApi);
+    renderer.render(vnode, document.querySelector('#app'));
+  </script>
+</body>
+
+</html>

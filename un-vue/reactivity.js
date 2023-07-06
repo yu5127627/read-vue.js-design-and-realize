@@ -393,7 +393,7 @@ function readonly(obj) {
   return createReactive(obj, false, true);
 }
 // 浅只读
-function shoallowReadonly(obj) {
+function shallowReadonly(obj) {
   return createReactive(obj, true, true);
 }
 // 深响应
