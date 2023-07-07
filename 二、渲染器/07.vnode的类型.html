@@ -13,7 +13,7 @@
   <script src="../un-vue/reactivity.js"></script>
   <script src="../un-vue/render.js"></script>
   <script>
-    function createRenddderer(options) {
+    function createRenderer(options) {
       const { createElement, setElementText, patchProps, insert } = options;
 
       // 挂载 vnode 到 container
@@ -95,7 +95,7 @@
       }
     }
 
-    const renderer = createRenddderer(elementApi);
+    const renderer = createRenderer(elementApi);
     let vnode = {
       type: 'p',
     }

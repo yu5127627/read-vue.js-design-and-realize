@@ -50,7 +50,7 @@
       return key in el
     }
 
-    function createRenddderer(options) {
+    function createRenderer(options) {
       const { createElement, setElementText, patchProps, insert } = options;
 
       // 挂载 vnode 到 container
@@ -110,7 +110,7 @@
       }
     }
 
-    const renderer = createRenddderer(elementApi);
+    const renderer = createRenderer(elementApi);
     const vnode = {
       type: 'div',
       props: {

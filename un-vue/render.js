@@ -111,7 +111,7 @@ const elementApi = {
   }
 }
 
-function createRenddderer(options) {
+function createRenderer(options) {
   const { createElement, setElementText, patchProps, createComment, createText, setText, insert } = options;
 
   // 挂载 vnode 到 container
@@ -204,6 +204,17 @@ function createRenddderer(options) {
     if (vnode.type === Fragment) {
       vnode.children.forEach(v => unmount(v));
       return
+    } else if (typeof vnode.type === 'object') {
+      // unode.shouldKeepAlive 是一个布尔值，用来标识该组件是否应该被 KeepAlive
+      if (vnode.shouldKeepAlive) {
+        // 对于需要被 KeepAlive 的组件，不应该卸载它
+        // KeepAlive 组件的 _deActivate() 使其激活
+        vnode.keepAliveInstance._deActivate(vnode);
+      } else {
+        // 对于组件的卸载，本质上是要卸载组件所渲染的内容，即 subTree
+        unmount(vnode.component.subTree);
+      }
+      return
     }
     const parent = vnode.el.parentNode;
     if (parent) {
@@ -253,8 +264,9 @@ function createRenddderer(options) {
         // 如果旧 vnode 存在，则只需要更新 children vnode
         patchChildren(oNode, nNode, container);
       }
-    } else if (typeof type === 'object') {
+    } else if (typeof type === 'object' || typeof type === 'function') {
       // 如果 nNode.type 的值的类型是对象，则它描述的是组件
+      // 如果 nNode.type 的值的类型是函数，则它描述的是函数式组件
       renderComponent(oNode, nNode, container, anchor);
     } else if (type === 'xxx') {
       // 处理其他类型的 vnode

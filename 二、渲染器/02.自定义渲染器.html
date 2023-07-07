@@ -27,7 +27,7 @@
       }
     }
 
-    function createRenddderer(options) {
+    function createRenderer(options) {
       const { createElement, setElementText, insert } = options;
       // 挂载 vnode 到 container
       function mountElement(vnode, container) {
@@ -74,7 +74,7 @@
       }
     }
 
-    const renderer = createRenddderer(elementApi);
+    const renderer = createRenderer(elementApi);
     const vnode = {
       type: 'h1',
       children: 'hello'

@@ -425,6 +425,19 @@ function ref(val) {
   // 将包裹对象变成响应式数据
   return reactive(wrapper)
 }
+// 封装一个 ref 函数
+function shallowRef(val) {
+  // 在 ref 函数内部创建包裹对象
+  const wrapper = {
+    value: val
+  }
+  // 为 wrapper 定义一个不可枚举的属性 _v_isRef = true
+  Object.defineProperty(wrapper, '_v_isRef', {
+    value: true
+  });
+  // 将包裹对象变成响应式数据
+  return shallowReactive(wrapper)
+}
 
 // 返回一个响应式 ref 对象
 function toRef(obj, key) {

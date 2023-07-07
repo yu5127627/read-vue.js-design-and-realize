@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>异步组件的实现原理</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../un-vue/utils.js"></script>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script src="../un-vue/components.js"></script>
+  <script>
+    // 定义一个异步组件
+    function defineAsyncComponent(loader) {
+      // 用作储存异步加载的组件
+      let InnerComp = null;
+
+      // 返回一个包装组件
+      return {
+        name: 'AsyncComponentWrapper',
+        setup() {
+          // 异步组件加载状态标识
+          const loaded = ref(false);
+
+          // 运行加载器
+          loader().then(c => {
+            // 组件赋值
+            InnerComp = c;
+            // 更改加载状态
+            loader.value = true;
+          })
+
+          return () => {
+            // 如果组件加载成功，则渲染该组件
+            if (loaded.value) {
+              return { type: InnerComp }
+            }
+            // 否则渲染一个占位内容
+            return { type: 'h1', children: 'load error' }
+          }
+        }
+      }
+    }
+
+    const MyComponent = {
+      // 组件名称 可选
+      name: 'MyComponent',
+      props: {
+        error: String
+      },
+      setup(props, { emit }) {
+        let count = ref(0);
+        console.log(props);
+        // onMounted(() => {
+        //   setInterval(() => {
+        //     count.value++;
+        //   }, 1000);
+        // })
+
+        return () => {
+          return {
+            type: 'div',
+            children: `${count.value}`
+          }
+        }
+      },
+    };
+
+    const vnode = {
+      type: defineAsyncComponent(() => import('dewwde.vue')),
+
+    }
+
+    const renderer = createRenderer(elementApi);
+    renderer.render(vnode, document.querySelector('#app'));
+  </script>
+</body>
+
+</html>
