@@ -60,7 +60,7 @@
           // 移动 vnode
           move(vnode, container, anchor) {
             // 本质上是将组件渲染的内容移动到指定容器中，即隐藏容器中
-            insert(vnode.component.subTree.el, container, anchor);
+            elementApi.insert(vnode.component.subTree.el, container, anchor);
           },
           createElement(tag) {
             return elementApi.createElement(tag)
@@ -286,7 +286,7 @@
           // 在组件 vnode 上添加 shouldKeepAlive 属性，并标记为 true,避免组件将组件卸载
           rawVNode.shouldKeepAlive = true;
           // 将 KeepAlive 组件的实例也添加到 vnode 上，以便在渲染器中访问
-          rawVNode.KeepAliveInstance = instance;
+          rawVNode.keepAliveInstance = instance;
           // 渲染组件 vnode
           return rawVNode
         }
@@ -304,44 +304,39 @@
         }
       }
     };
+    const MyComponent1 = {
+      // 组件名称 可选
+      name: 'MyComponent',
+      // 渲染函数。其返回值必须为虚拟 DOM
+      render() {
+        return {
+          type: 'div',
+          children: 'MyComponent1'
+        }
+      }
+    };
+    let bool = ref(false);
+
     const vnode = {
-      type: MyComponent,
+      type: KeepAlive,
       children: {
         default() {
-          return { type: KeepAlive }
+          return {
+            type: bool.value ? MyComponent : MyComponent1
+          }
         },
       }
     }
 
+    setTimeout(() => {
+      bool.value = true
+    }, 1000)
+    setTimeout(() => {
+      bool.value = false
+    }, 2000)
+
     const renderer = createRenderer(elementApi);
     renderer.render(vnode, document.querySelector('#app'));
-
-    setTimeout(() => {
-      const MyComponent2 = {
-        // 组件名称 可选
-        name: 'MyComponent2',
-        // 渲染函数。其返回值必须为虚拟 DOM
-        render() {
-          return {
-            type: 'h1',
-            children: 'hello vue!'
-          }
-        }
-      };
-      const vnode = {
-        type: KeepAlive,
-        props: {
-          title: 'title'
-        },
-        children: {
-          default() {
-            return { type: MyComponent2 }
-          },
-        }
-      }
-
-      renderer.render(vnode, document.querySelector('#app'));
-    }, 1000)
   </script>
 </body>
 
