@@ -117,6 +117,7 @@ function createRenderer(options) {
   // 挂载 vnode 到 container
   function mountElement(vnode, container) {
     const el = vnode.el = createElement(vnode.type);
+
     if (typeof vnode.children === 'string') {
       setElementText(el, vnode.children);
     } else if (Array.isArray(vnode.children)) {
@@ -125,7 +126,6 @@ function createRenderer(options) {
         patch(null, child, el);
       })
     }
-
     // 处理 props
     if (vnode.props) {
       for (const key in vnode.props) {
@@ -133,7 +133,15 @@ function createRenderer(options) {
       }
     }
 
+    // 判断一个 vnode 是否需要过渡
+    const needTransition = vnode.transition;
+    if (needTransition) {
+      vnode.transition.beforeEnter(el);
+    }
     insert(el, container);
+    if (needTransition) {
+      vnode.transition.enter(el);
+    }
   }
 
   // 更新 vnode-children
@@ -200,6 +208,9 @@ function createRenderer(options) {
 
   // 卸载 vnode
   function unmount(vnode) {
+    // 判断 vnode 是否需要过渡处理
+    const needTransition = vnode.transition;
+
     // 处理自定义 Fragment 类型的 vnode,只需要卸载其 children
     if (vnode.type === Fragment) {
       vnode.children.forEach(v => unmount(v));
@@ -218,7 +229,14 @@ function createRenderer(options) {
     }
     const parent = vnode.el.parentNode;
     if (parent) {
-      parent.removeChild(vnode.el);
+      // 将卸载动作封装到 performRemove 函数用作参数传递
+      const performRRemove = () => parent.removeChild(vnode.el);
+
+      if (needTransition) {
+        vnode.transition.leave(vnode.el, performRRemove);
+      } else {
+        parent.removeChild(vnode.el);
+      }
     }
   }
 
@@ -264,6 +282,19 @@ function createRenderer(options) {
         // 如果旧 vnode 存在，则只需要更新 children vnode
         patchChildren(oNode, nNode, container);
       }
+    } else if (typeof type === 'object' && type.__isTeleport) {
+      // 组件中存在 __isTeleport 标识，说明是 Teleport 组件
+      // 调用 Teleport 组件选项中的 process 函数将控制权交接出去
+      // 传递给 process 函数的第五个参数是渲染器的一些内部方法
+      type.process(oNode, nNode, container, anchor, {
+        patch, patchChildren, unmount,
+        move(vnode, container, anchor) {
+          elementApi.insert(
+            vnode.component ? vnode.component.subTree.el : vnode.el, // 移动组件 or 移动普通元素
+            container, anchor
+          )
+        }
+      })
     } else if (typeof type === 'object' || typeof type === 'function') {
       // 如果 nNode.type 的值的类型是对象，则它描述的是组件
       // 如果 nNode.type 的值的类型是函数，则它描述的是函数式组件

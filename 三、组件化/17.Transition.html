@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实现 Teleport 组件</title>
+  <style>
+    .box {
+      width: 100px;
+      height: 100px;
+      background-color: red;
+    }
+
+    .enter-from {
+      transform: translateX(200px);
+    }
+
+    .enter-to {
+      transform: translateX(0);
+    }
+
+    .enter-actiive {
+      transition: transform 1s ease-in-out;
+    }
+
+    .leave-from {
+      transform: translateX(0);
+    }
+
+    .leave-to {
+      transform: translateX(200px);
+    }
+
+    .leave-active {
+      transition: transform 2s ease-out;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- <div id="app"></div> -->
+  <!-- <div class="box"></div> -->
+  <script src="../un-vue/utils.js"></script>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script src="../un-vue/components.js"></script>
+  <script>
+    const Transition = {
+      name: 'Transition',
+      setup(props, { slots }) {
+        return () => {
+          // 通过默认插槽获取需要过渡的内容
+          const innerVNode = slots.default();
+          // 为过渡元素的 vnode 对象上添加 transition 相应的钩子函数
+          innerVNode.transition = {
+            beforeEnter(el) {
+              el.classList.add('enter-from');
+              el.classList.add('enter-active');
+            },
+            enter(el) {
+              // 在下一帧切换到结束状态
+              requestAnimationFrame(() => {
+                // 移除 enter-from 类，添加 enter-to 类
+                el.classList.remove('enter-from');
+                el.classList.add('enter-to');
+                // 监听 transitionend 事件完成收尾工作
+                el.addEventListener('transitionend', () => {
+                  el.classList.remove('enter-to');
+                  el.classList.remove('enter-active');
+                })
+              })
+            },
+            leave(el, performRemove) {
+              // 设置离场过渡的初始状态
+              el.classList.add('leave-from');
+              el.classList.add('leave-actiive');
+              // 强制 reflow,使得初始状态生效
+              document.body.offsetHeight;
+              // 在下一帧修改状态
+              nextFrame(() => {
+                el.classList.remove('leave-from');
+                el.classList.add('leave-to');
+                // 监听 transitionend 事件完成收尾工作
+                el.addEventListener('transitionend', () => {
+                  el.classList.remove('leave-to');
+                  el.classList.remove('leave-active');
+                  // 调用 transition.leave 钩子函数的第二个参数，完成 dom 元素的卸载
+                  performRemove();
+                })
+              })
+            }
+          }
+          // 渲染需要过渡的元素
+          return innerVNode
+        }
+      }
+    }
+
+    const renderer = createRenderer(elementApi);
+
+    const vnode = {
+      type: Transition,
+      children: {
+        default() {
+          return {
+            type: 'div',
+            props: {
+              class: 'box'
+            },
+            children: '我是需要过渡的元素'
+          }
+        }
+      }
+    };
+
+    // renderer.render(vnode, document.querySelector('#app'));
+
+    const el = document.createElement('div');
+    el.classList.add('box');
+    el.classList.add('enter-from');
+    el.classList.add('enter-active');
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.classList.remove('enter-from');
+        el.classList.add('enter-to');
+
+        el.addEventListener('transitionend', () => {
+          el.classList.remove('enter-to')
+          el.classList.remove('enter-active')
+        })
+      })
+    })
+  </script>
+</body>

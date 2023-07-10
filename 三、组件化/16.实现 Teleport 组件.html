@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实现 Teleport 组件</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <div id="flex"></div>
+  <script src="../un-vue/utils.js"></script>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script src="../un-vue/components.js"></script>
+  <script>
+    const Teleport = {
+      __isTeleport: true,
+      process(oNode, nNode, container, anchor, internals) {
+        // 取得渲染器内部方法
+        const { patch, patchChildren } = internals;
+        // 不存在旧的节点，则是挂载，否则执行更新
+        if (!oNode) {
+          const target = typeof nNode.props.to === 'string' ?
+            document.querySelector(nNode.props.to) : nNode.props.to;
+          nNode.children.forEach(node => patch(null, node, target, anchor));
+        } else {
+          // 更新
+          patchChildren(oNode, nNode, container);
+          // 获取新的容器
+          if (nNode.props.to !== oNode.props.to) {
+            const newTarget = typeof nNode.props.to === 'string'
+              ? document.querySelector(nNode.props.to) : nNode.props.to;
+            // 移动到新的容器
+            nNode.children.forEach(node => move(node, newTarget));
+          }
+        }
+      }
+    }
+
+
+
+    const renderer = createRenderer(elementApi);
+    let flag = ref(false);
+    const vnode = {
+      type: Teleport,
+      props: {
+        to: flag.value ? 'body' : '#flex'
+      },
+      children: [
+        { type: 'h1', children: 'Title' },
+        { type: 'p', children: 'content' },
+      ]
+    };
+
+    renderer.render(vnode, document.querySelector('#app'));
+  </script>
+</body>
+
+</html>

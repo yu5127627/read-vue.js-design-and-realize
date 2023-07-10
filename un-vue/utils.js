@@ -27,3 +27,7 @@ function queueJob(job) {
 
   }
 }
+
+const nextFrame = (fn) => {
+  setTimeout(fn, 0)
+}
