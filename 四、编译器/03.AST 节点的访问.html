@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AST 节点的访问</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../un-vue/utils.js"></script>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script src="../un-vue/components.js"></script>
+  <script src="../un-vue/compiler.js"></script>
+  <script>
+    // 转换标签节点
+    function transformElement(node) {
+      if (node.type === 'Element') {
+        if (node.tag === 'p') {
+          node.tag = 'h1';
+        }
+      }
+    }
+
+    // 转换文本节点
+    function transformText(node) {
+      if (node.type === 'Text') {
+        node.content = node.content.repeat(2);
+      }
+    }
+
+
+    // ast 节点深度访问
+    function traverseNode(ast, context) {
+      // 当前节点，ast 本身就是 root 节点
+      const currentNode = ast;
+
+      // context.nodeTransforms 是一个数组，其中每一个元素都是一个函数
+      const transforms = context.nodeTransforms;
+      for (let i = 0; i < transforms.length; i++) {
+        // 将当前节点 currentNode 和  context 都传递给 nodeTransforms 中注册的回调函数
+        transforms[i](currentNode, context);
+      }
+
+      // 如果有子节点，则递归的调用 traverseNode 函数进行遍历
+      const children = currentNode.children;
+      if (children) {
+        for (let i = 0; i < children.length; i++) {
+          traverseNode(children[i], context);
+        }
+      }
+    }
+
+    function transform(ast) {
+      const context = {
+        nodeTransforms: [
+          transformElement,
+          transformText
+        ]
+      };
+      traverseNode(ast, context);
+      dump(ast)
+    }
+
+    const ast = parse(`<div><p>vue</p><p>template</p></div>`);
+    transform(ast);
+    // console.log(JSON.stringify(ast, null, 2));
+  </script>
+</body>
