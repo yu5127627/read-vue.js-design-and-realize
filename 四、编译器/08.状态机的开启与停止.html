@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>递归下降算法构造模板 AST</title>
+  <title>状态机的开启与停止</title>
 </head>
 
 <body>
@@ -186,7 +186,7 @@
           // 只有 DATA 模式才支持标签节点的解析
           if (mode === TextModes.DATA && source[0] === '<') {
             if (source[1] === '') {
-              if (source.startsWith("<!--") ){
+              if (source.startsWith("<!--"  ){
                 // 注释
                 node = parseComment(context);
               } else if (source.startsWith('<![CDATA[')) {
