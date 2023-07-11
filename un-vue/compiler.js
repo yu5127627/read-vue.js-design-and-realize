@@ -234,12 +234,13 @@ function transformElement(node) {
     // 2.处理 h 函数调用的参数
     node.children.length === 1
       ? // 如果当前标签节点只有一个子节点，则直接使用子节点的 jsNode 作为参数
-        callExp.arguments.push(node.children[0].jsNode)
+      callExp.arguments.push(node.children[0].jsNode)
       : // 如果当前标签节点有多个子节点 则创建一个 ArrayExpression 节点作为参数
-        callExp.arguments.push(
-          // 数组的每个元素都是子节点的 jsNode
-          createArrayExpression(node.children.map((c) => c.jsNode))
-        );
+      callExp.arguments.push(
+        // 数组的每个元素都是子节点的 jsNode
+        createArrayExpression(node.children.map((c) => c.jsNode))
+      );
+    node.jsNode = callExp
   };
 }
 
@@ -316,12 +317,12 @@ function transform(ast) {
       }
     },
     nodeTransforms: [
-      transformRoot,
       // 注册的转换函数
+      transformRoot,
       transformElement,
       transformText,
     ],
   };
   traverseNode(ast, context);
-  // dump(ast);
+  dump(ast);
 }

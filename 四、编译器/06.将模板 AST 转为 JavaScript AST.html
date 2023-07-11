@@ -25,6 +25,7 @@
         // 暂时忽略多个根节点
         const vnodeJSAST = node.children[0].jsNode;
         // 创建 render 函数的声明语句，将 vnodeJSAST 作为 render 函数体的返回语句
+        console.log('transformRoot');
         node.jsNode = {
           type: 'FunctionDecl',
           id: {
@@ -65,9 +66,10 @@
             // 数组的每个元素都是子节点的 jsNode
             createArrayExpression(node.children.map(c => c.jsNode))
           )
+        // 3.将当前标签节点对应的 js ast 添加到 jsNode 属性下
+        console.log('transformElement');
+        node.jsNode = callExp;
       };
-      // 3.将当前标签节点对应的 js ast 添加到 jsNode 属性下
-      node.jsNode = callExp;
     }
 
     // 转换文本节点
@@ -75,6 +77,8 @@
       if (node.type !== "Text") {
         return
       }
+      console.log('transformText');
+
       // 文本节点对应 js ast 节点其实就是一个字符串字面量
       node.jsNode = createStringLiteral(node.content);
     }
@@ -213,11 +217,9 @@
       const ast = parse(template);
       // 将模板 ast 转换为 javascript ast
       transform(ast);
-      console.log(JSON.stringify(ast, null, 2));
-      debugger
+      // console.log(ast);
       // 代码生成
-      const code = generate(ast.jsNode);
-      return code
+      return generate(ast.jsNode);
     }
     const str = `<div><p>vue</p><p>template</p></div>`;
     console.log(compile(str));
