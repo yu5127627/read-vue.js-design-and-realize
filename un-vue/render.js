@@ -111,15 +111,18 @@ const elementApi = {
   }
 }
 
+for (const key in elementApi) {
+  window[key] = elementApi[key];
+}
 function createRenderer(options) {
   const { createElement, setElementText, patchProps, createComment, createText, setText, insert } = options;
 
   // 挂载 vnode 到 container
-  function mountElement(vnode, container) {
+  function mountElement(vnode, container, anchor) {
     const el = vnode.el = createElement(vnode.type);
 
     if (typeof vnode.children === 'string') {
-      setElementText(el, vnode.children);
+      setElementText(el, vnode.key ? vnode.children + ` _ key ${vnode.key}` : vnode.children);
     } else if (Array.isArray(vnode.children)) {
       // 多个子节点，遍历用 patch 挂载它们
       vnode.children.forEach(child => {
@@ -138,52 +141,15 @@ function createRenderer(options) {
     if (needTransition) {
       vnode.transition.beforeEnter(el);
     }
-    insert(el, container);
+    insert(el, container, anchor);
     if (needTransition) {
       vnode.transition.enter(el);
     }
+    console.log(`--------------------- mount tag: ${vnode.type}-------------------`);
   }
 
   // 更新 vnode-children
-  function patchChildren(oNode, nNode, container) {
-    // 判断子节点的类型是否为文本节点
-    if (typeof nNode.children === "string") {
-      // 旧子节点的类型有三种可能：没有子节点、文本子节点以及一组子节点
-      // 只有当旧子节点为一组子节点时，才需要逐个卸载，其他情况下的什么都不需要做
-      if (Array.isArray(oNode.children)) {
-        oNode.children.forEach(v => unmount(v));
-      }
-      // 最后将新的文本节点内容设置给容器元素
-      setElementText(container, nNode.children);
-    } else if (Array.isArray(nNode.children)) {
-      // 说明新子节点是一组子节点
-      // 判断旧子节点是否也是一组子节点
-      if (Array.isArray(oNode.children)) {
-        // 运行到此处 说明新旧子节点都是一组子节点。
-        // 此处开始核心的 diff 算法
-
-        // 旧节点全部卸载
-        oNode.children.forEach(v => unmount(v));
-        // 新节点全部挂载
-        nNode.children.forEach(v => patch(null, v, container));
-
-      } else {
-        // 旧子节点要么是文本子节点 要么不存在
-        // 但无论哪种情况，我们只需要将容器清空，然后将新的一组子节点逐个挂载
-        setElementText(container, '');
-        nNode.children.forEach(c => patch(null, c, container))
-      }
-    } else {
-      // 新子节点不存在，旧子节点是一组子节点，只需逐个卸载即可
-      if (Array.isArray(oNode.children)) {
-        oNode.children.forEach(v => unmount(v));
-      } else if (typeof oNode.children === 'string') {
-        // 旧子节点是文本子节点，清空内容即可
-        setElementText(container, '');
-      }
-      // 没有子节点 没有操作
-    }
-  }
+  patchChildren = patchChildren;
 
   // 更新 vnode
   function patchElement(oNode, nNode) {
@@ -246,6 +212,7 @@ function createRenderer(options) {
     if (oNode && oNode.type !== nNode.type) {
       // 如果新旧 vnode 的类型不同，则直接将旧 vnode 卸载
       unmount(oNode);
+      console.log(`--------------------- unmount tag: ${oNode.type}-------------------`);
       oNode = null;
     }
     // 运行到此处 说明新旧节点类型相同
@@ -253,7 +220,7 @@ function createRenderer(options) {
     if (typeof type === 'string') {
       // 不存在 oNode，意味着挂载，调用 mountElement() 完成挂载
       if (!oNode) {
-        mountElement(nNode, container);
+        mountElement(nNode, container, anchor);
       } else {
         // oNode 存在，意味着打补丁，即更新内容
         patchElement(oNode, nNode);
@@ -321,6 +288,7 @@ function createRenderer(options) {
 
   function hydrate(vnode, container) { }
 
+  window.unmount = unmount;
   window.patch = patch;
   return {
     render,

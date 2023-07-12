@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>减少 DOM 操作</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../../un-vue/utils.js"></script>
+  <script src="../../un-vue/reactivity.js"></script>
+  <script src="../../un-vue/render.js"></script>
+  <script src="../../un-vue/components.js"></script>
+  <script>
+    function patchChildren(oNode, nNode, container) {
+      // 判断子节点的类型是否为文本节点
+      if (typeof nNode.children === "string") {
+        // 旧子节点的类型有三种可能：没有子节点、文本子节点以及一组子节点
+        // 只有当旧子节点为一组子节点时，才需要逐个卸载，其他情况下的什么都不需要做
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        }
+        // 最后将新的文本节点内容设置给容器元素
+        setElementText(container, nNode.children);
+      } else if (Array.isArray(nNode.children)) {
+        // 说明新子节点是一组子节点
+        // 判断旧子节点是否也是一组子节点
+        if (Array.isArray(oNode.children)) {
+          // 运行到此处 说明新旧子节点都是一组子节点。
+          // 此处开始核心的 diff 算法
+          const oldChildren = oNode.children;
+          const newChildren = nNode.children;
+
+          const oldLen = oldChildren.length;
+          const newLen = newChildren.length;
+          // 获取新旧节点最短的节点长度
+          const commonLength = Math.min(oldLen, newLen);
+          // 更新最短的节点
+          for (let i = 0; i < oldChildren.length; i++) {
+            patch(oldChildren[i], newChildren[i], container);
+          }
+          // 符合条件说明有新节点需要挂载
+          if (newLen > oldLen) {
+            for (let i = commonLength; i < newLen; i++) {
+              patch(null, newChildren[i], container);
+            }
+          } else if (oldLen > newLen) {
+            // 符合条件说明有旧节点需要卸载
+            for (let i = commonLength; i < oldLen; i++) {
+              unmount(oldChildren[i]);
+            }
+          }
+
+        } else {
+          // 旧子节点要么是文本子节点 要么不存在
+          // 但无论哪种情况，我们只需要将容器清空，然后将新的一组子节点逐个挂载
+          setElementText(container, '');
+          nNode.children.forEach(c => patch(null, c, container))
+        }
+      } else {
+        // 新子节点不存在，旧子节点是一组子节点，只需逐个卸载即可
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        } else if (typeof oNode.children === 'string') {
+          // 旧子节点是文本子节点，清空内容即可
+          setElementText(container, '');
+        }
+        // 没有子节点 没有操作
+      }
+      console.log(`----- patch oldTag: ${oNode.type}, newTag: ${nNode.type} -------------------`);
+    }
+
+    const renderer = createRenderer(elementApi);
+    const vnode = {
+      type: 'div',
+      children: [
+        { type: 'p', children: '1' },
+        { type: 'p', children: '2' },
+      ]
+    };
+
+    renderer.render(vnode, document.querySelector('#app'));
+
+    setTimeout(() => {
+      const vnode = {
+        type: 'div',
+        children: [
+          { type: 'p', children: '4' },
+          { type: 'p', children: '5' },
+          { type: 'p', children: '6' },
+        ]
+      };
+      console.log('``````````````````````` update `````````````````````');
+      renderer.render(vnode, document.querySelector('#app'));
+    }, 1000)
+  </script>
+</body>
+
+</html>

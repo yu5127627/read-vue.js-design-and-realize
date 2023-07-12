@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOM 复用与 key 的作用-移除元素</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../../un-vue/utils.js"></script>
+  <script src="../../un-vue/reactivity.js"></script>
+  <script src="../../un-vue/render.js"></script>
+  <script src="../../un-vue/components.js"></script>
+  <script>
+    function patchChildren(oNode, nNode, container) {
+      // 判断子节点的类型是否为文本节点
+      if (typeof nNode.children === "string") {
+        // 旧子节点的类型有三种可能：没有子节点、文本子节点以及一组子节点
+        // 只有当旧子节点为一组子节点时，才需要逐个卸载，其他情况下的什么都不需要做
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        }
+        // 最后将新的文本节点内容设置给容器元素
+        console.log('setElementText', nNode);
+        setElementText(container, nNode.key ? nNode.children + ` _ key ${nNode.key}` : nNode.children);
+      } else if (Array.isArray(nNode.children)) {
+        // 说明新子节点是一组子节点
+        // 判断旧子节点是否也是一组子节点
+        if (Array.isArray(oNode.children)) {
+          // 运行到此处 说明新旧子节点都是一组子节点。
+          // 此处开始核心的 diff 算法
+          const oldChildren = oNode.children;
+          const newChildren = nNode.children;
+
+          let arr = [];
+          for (const v of container.children) {
+            arr.push(v.innerHTML)
+          }
+          console.log('初始 DOM 结构', arr);
+
+          // 新节点在旧节点中索引位置
+          let lastIndex = 0;
+          for (let i = 0; i < newChildren.length; i++) {
+            const newVNode = newChildren[i];
+
+            let j = 0;
+            // 标记是否在旧子节点中找到可复用的节点
+            let find = false;
+
+            for (j; j < oldChildren.length; j++) {
+              const oldVNode = oldChildren[j];
+              // 如果找到具有相同 key 值的两个节点，说明可以复用
+              if (newVNode.key === oldVNode.key) {
+                // 找到可复用的节点，则更新标记为 true
+                find = true;
+                // 但仍然需要调用 patch 函数更新
+                patch(oldVNode, newVNode, container);
+                // 如果当前“新节点在旧节点中索引位置“ < 之前存储的“新节点在旧节点中索引位置“ = 触发移动
+                if (j < lastIndex) {
+                  // 获取前一个 vnode
+                  const prevVNode = newChildren[i - 1];
+
+                  // prevVNode 不存在，说明是第一个节点，不需要移动
+                  if (prevVNode) {
+                    // 获取 prevVNode 对应真实 dom 的下一个兄弟节点，将其作为锚点
+                    // 相当于 newChildren[i] 的真实 dom
+                    const anchor = prevVNode.el.nextSibling;
+                    let arr = [];
+                    for (const v of container.children) {
+                      arr.push(v.innerHTML)
+                    }
+                    console.log('更新前 DOM 结构', arr);
+                    if (anchor) {
+                      // 如果锚点存在，则插入到锚点之前
+                      console.log(prevVNode.el.nextSibling.innerHTML);
+                      insert(newVNode.el, container, anchor);
+                    } else {
+                      // 锚点不存在，则插入到父元素的最后一个
+                      insert(newVNode.el, container);
+                    }
+
+                    arr = [];
+                    for (const v of container.children) {
+                      arr.push(v.innerHTML)
+                    }
+                    console.log('更新后 DOM 结构', arr);
+                  }
+                } else {
+                  // 更新当前新节点在旧节点的索引位置
+                  lastIndex = j;
+                }
+                // 因为找到新旧节点相同 key 的 vnode, 所以可以终止本次循环
+                break;
+              }
+            }
+
+            // 到此处仍旧未找到，说明当前 newVNode 没有在旧子节点中找到可复用的节点
+            // 说明当前 newVNode 是新增节点，需要挂载
+            if (!find) {
+              // 获取当前 newVNode 的前一个 vnode 节点
+              const prevVNode = newChildren[i - 1];
+              let anchor = null;
+              if (prevVNode) {
+                // 如果存在前一个 vnode 节点，则使用它的下一个兄弟节点作为锚点元素
+                anchor = prevVNode.el.nextSibling;
+                console.log('锚点-自身节点', anchor);
+              } else {
+                // 如果没有前一个 vnode 节点，说明即将挂载的新节点是第一个子节点
+                // 这时我们使用容器元素的 firstChild 作为锚点
+                anchor = container.firstChild;
+                console.log('锚点-第一节点', anchor);
+              }
+              let arr = [];
+              for (const v of container.children) {
+                arr.push(v.innerHTML)
+              }
+              console.log('新增节点前 DOM 结构', arr);
+              // 挂载 newVNode
+              patch(null, newVNode, container, anchor);
+              arr = [];
+              for (const v of container.children) {
+                arr.push(v.innerHTML)
+              }
+              console.log('新增节点后 DOM 结构', arr);
+            }
+
+            // 遍历旧子节点 执行删除操作
+            for (let i = 0; i < oldChildren.length; i++) {
+              const oldVNode = oldChildren[i];
+              // 拿旧子节点 oldVNode 去新的一组子节点寻找具有相同 key 值的节点
+              const has = newChildren.find(vnode => vnode.key === oldVNode.key);
+              if (!has) {
+                // 不存在说明需要删除，调用 unmount 卸载
+                unmount(oldVNode);
+              }
+            }
+          }
+
+        } else {
+          // 旧子节点要么是文本子节点 要么不存在
+          // 但无论哪种情况，我们只需要将容器清空，然后将新的一组子节点逐个挂载
+          setElementText(container, '');
+          nNode.children.forEach(c => patch(null, c, container))
+        }
+      } else {
+        // 新子节点不存在，旧子节点是一组子节点，只需逐个卸载即可
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        } else if (typeof oNode.children === 'string') {
+          // 旧子节点是文本子节点，清空内容即可
+          setElementText(container, '');
+        }
+        // 没有子节点 没有操作
+      }
+      console.log(`----- patch oldTag: ${oNode.type}, newTag: ${nNode.type} -------------------`);
+    }
+
+    const renderer = createRenderer(elementApi);
+    const vnode = {
+      type: 'div',
+      children: [
+        { type: 'p', children: '1', key: 1 },
+        { type: 'p', children: '2', key: 2 },
+        { type: 'p', children: 'hello', key: 3 },
+      ]
+    };
+    console.log('初始渲染的 vnode', vnode);
+    renderer.render(vnode, document.querySelector('#app'));
+
+    setTimeout(() => {
+      const vnode = {
+        type: 'div',
+        children: [
+          { type: 'p', children: 'hello', key: 3 },
+          { type: 'p', children: '1', key: 1 },
+        ]
+      };
+
+      console.log('二次渲染的 vnode', vnode);
+
+
+      console.log('``````````````````````` update `````````````````````');
+      renderer.render(vnode, document.querySelector('#app'));
+    }, 1000)
+  </script>
+</body>
+
+</html>
