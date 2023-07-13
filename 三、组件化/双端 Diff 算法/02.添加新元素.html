@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>添加新元素</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../../un-vue/utils.js"></script>
+  <script src="../../un-vue/reactivity.js"></script>
+  <script src="../../un-vue/render.js"></script>
+  <script src="../../un-vue/components.js"></script>
+  <script>
+    function patchChildren(oNode, nNode, container) {
+      // 判断子节点的类型是否为文本节点
+      if (typeof nNode.children === "string") {
+        // 旧子节点的类型有三种可能：没有子节点、文本子节点以及一组子节点
+        // 只有当旧子节点为一组子节点时，才需要逐个卸载，其他情况下的什么都不需要做
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        }
+        // 最后将新的文本节点内容设置给容器元素
+        console.log('setElementText', nNode);
+        setElementText(container, nNode.key ? nNode.children + ` _ key ${nNode.key}` : nNode.children);
+      } else if (Array.isArray(nNode.children)) {
+        patchKeyedChildren(oNode, nNode, container);
+      } else {
+        // 新子节点不存在，旧子节点是一组子节点，只需逐个卸载即可
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        } else if (typeof oNode.children === 'string') {
+          // 旧子节点是文本子节点，清空内容即可
+          setElementText(container, '');
+        }
+        // 没有子节点 没有操作
+      }
+      console.log(`----- patch oldTag: ${oNode.type}, newTag: ${nNode.type} -------------------`);
+    }
+
+    function patchKeyedChildren(oNode, nNode, container) {
+      const oldChildren = oNode.children;
+      const newChildren = nNode.children;
+      // 四个索引值
+      let oldStartIdx = 0;
+      let oldEndIdx = oldChildren.length - 1;
+      let newStartIdx = 0;
+      let newEndIdx = newChildren.length - 1;
+      // 四个索引指向的 vnode 节点
+      let oldStartVNode = oldChildren[oldStartIdx];
+      let oldEndVNode = oldChildren[oldEndIdx];
+      let newStartVNode = newChildren[newStartIdx];
+      let newEndVNode = newChildren[newEndIdx];
+
+      // 新旧子节点的头部索引 <= 新旧子节点尾部索引
+      while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+        let arr = [];
+        for (const node of container.children) {
+          arr.push(node.textContent);
+        }
+        console.log('更新前', arr);
+        console.log(`更新前 oldStartIdx:${oldStartIdx}, oldEndIdx:${oldEndIdx}, newStartIdx:${newStartIdx}, newEndIdx:${newEndIdx}`);
+
+        // 如果头尾部节点为 undefined，则说明该及诶点已经被处理过了，直接跳到下一个位置
+        if (!oldStartVNode) {
+          console.log('nooldStartVNode');
+          oldStartVNode = oldChildren[++oldStartIdx];
+        } else if (!oldEndVNode) {
+          console.log('nooldEndVNode');
+          oldEndVNode = oldChildren[--oldEndIdx];
+        } else if (oldStartVNode.key === newStartVNode.key) {
+          // 如果旧子节点第一个节点的 key = 新子节点第一个节点的的 key
+          patch(oldStartVNode, newStartVNode, container);
+          // 更新相关索引，指向下一个位置
+          oldStartVNode = oldChildren[++oldStartIdx];
+          newStartVNode = newChildren[++newStartIdx];
+        } else if (oldEndVNode.key === newEndVNode.key) {
+          // 如果旧子节点最后一个节点的 key = 新子节点最后一个节点的的 key
+          // 节点在新的顺序中仍然处于尾部，不需要移动，但仍需打补丁
+          patch(oldEndVNode, newEndVNode, container);
+          // 更新索引和头尾部节点变量
+          oldEndVNode = oldChildren[--oldEndIdx];
+          newEndVNode = newChildren[--newEndIdx];
+        } else if (oldStartVNode.key === newEndVNode.key) {
+          // 如果旧子节点第一个节点的 key = 新子节点最后一个节点的的 key
+          patch(oldStartVNode, newEndVNode, container);
+          // 将旧的一组子节点的头部节点对应的真实 dom 节点 oldStartVNode.el 移动到
+          // 旧的一组子节点的尾部节点对应的真实 dom 节点后面
+          insert(oldStartVNode.el, container, oldEndVNode.el.nextSibling);
+          // 更新相关索引到下一个位置
+          oldStartVNode = oldChildren[++oldStartIdx];
+          newEndVNode = newChildren[--newEndIdx];
+        } else if (oldEndVNode.key === newStartVNode.key) {
+          // 如果旧子节点最后一个节点的 key = 新子节点第一个节点的的 key
+          // 仍然需要调用 patch 函数进行打补丁
+          patch(oldEndVNode, newStartVNode, container);
+          // 移动 dom
+          // oldEndVNode.el 移动到 oldStartVNode.el 前面
+          insert(oldEndVNode.el, container, oldStartVNode.el);
+          // 移动 dom 完成后，更新索引值，并指向下一个位置
+          // oldEndIdx 当前已经是最后一个子节点的索引，所以需要向前移动一个
+          oldEndVNode = oldChildren[--oldEndIdx];
+          // newStartIdx 当前已经是第一个子节点的索引，所以需要向后移动一个
+          newStartVNode = newChildren[++newStartIdx];
+        } else {
+          // 以上都无法命中的情况下
+          // 遍历旧子节点，寻找与新子节点头部节点 key 相同节点的索引
+          // 然后将匹配到的旧节点移动到旧节点的第一个
+          // idxInOld 就是新的一组子节点的头部节点在旧的一组子节点中的索引
+          const idxInOld = oldChildren.findIndex(node => node.key === newStartVNode.key);
+          console.log('idxInOld', idxInOld);
+          if (idxInOld > 0) {
+            // idxInOld 位置对应的 vnode 就是需要移动的节点
+            const vnodeToMove = oldChildren[idxInOld];
+            patch(vnodeToMove, newStartVNode, container);
+            // 将 vnodeToMove.el 移动到头部节点 oldStartVNode.el 之前，因此使用后者作为锚点
+            insert(vnodeToMove.el, container, oldStartVNode.el);
+            // 由于位置 idxInOld 处的节点所对应的真实 dom 已经移动到了别处，因为将其设置为 undefined
+            oldChildren[idxInOld] = undefined;
+            // 最后更新 newStartIdx 到下一个位置
+            newStartVNode = newChildren[++newStartIdx];
+          } else {
+            // 将 newStartVNode 作为新节点挂载到头部，使用当前头部节点 oldStartVNode.el 作为锚点
+            patch(null, newStartVNode, container, oldStartVNode.el);
+          }
+          newStartVNode = newChildren[++newStartIdx];
+        }
+
+        arr = [];
+        for (const node of container.children) {
+          arr.push(node.textContent);
+        }
+        console.log('更新后', arr);
+        console.log(`更新后 oldStartIdx:${oldStartIdx}, oldEndIdx:${oldEndIdx}, newStartIdx:${newStartIdx}, newEndIdx:${newEndIdx}`);
+        console.log('-----------------------------------------------');
+      }
+
+      // 循环结束后检查索引值的情况
+      if (oldEndIdx < oldStartIdx && newStartIdx <= newEndIdx) {
+        // 满足条件，说明有新节点遗留，需要挂载
+        for (let i = newStartIdx; i <= newEndIdx; i++) {
+          patch(null, newChildren[i], container, oldStartVNode.el);
+        }
+      } else if (newEndIdx < newStartIdx && oldStartIdx <= oldEndIdx) {
+        // for (let i = oldStartIdx; i <= oldEndIdx; i++) {
+        //   unmount(oldChildren[i]);
+        // }
+      }
+    }
+
+
+    const renderer = createRenderer(elementApi);
+    const vnode = {
+      type: 'div',
+      children: [
+        { type: 'p', children: '1', key: 1 },
+        { type: 'p', children: '2', key: 2 },
+        { type: 'p', children: '3', key: 3 }
+      ]
+    };
+    console.log('初始渲染的 vnode', vnode);
+    renderer.render(vnode, document.querySelector('#app'));
+
+    setTimeout(() => {
+      const vnode = {
+        type: 'div',
+        children: [
+          { type: 'p', children: '4', key: 4 },
+          { type: 'p', children: '1', key: 1 },
+          { type: 'p', children: '2', key: 2 },
+          { type: 'p', children: '3', key: 3 },
+        ]
+      };
+
+      console.log('二次渲染的 vnode', vnode);
+
+
+      console.log('``````````````````````` update `````````````````````');
+      renderer.render(vnode, document.querySelector('#app'));
+    }, 1000)
+  </script>
+</body>
+
+</html>
