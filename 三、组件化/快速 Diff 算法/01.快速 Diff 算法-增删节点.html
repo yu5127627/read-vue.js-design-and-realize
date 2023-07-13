@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快速 Diff 算法-增删节点</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../../un-vue/utils.js"></script>
+  <script src="../../un-vue/reactivity.js"></script>
+  <script src="../../un-vue/render.js"></script>
+  <script src="../../un-vue/components.js"></script>
+  <script>
+    function patchChildren(oNode, nNode, container) {
+      // 判断子节点的类型是否为文本节点
+      if (typeof nNode.children === "string") {
+        // 旧子节点的类型有三种可能：没有子节点、文本子节点以及一组子节点
+        // 只有当旧子节点为一组子节点时，才需要逐个卸载，其他情况下的什么都不需要做
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        }
+        // 最后将新的文本节点内容设置给容器元素
+        console.log('setElementText', nNode);
+        setElementText(container, nNode.key ? nNode.children + ` _ key ${nNode.key}` : nNode.children);
+      } else if (Array.isArray(nNode.children)) {
+        patchKeyedChildren(oNode, nNode, container);
+      } else {
+        // 新子节点不存在，旧子节点是一组子节点，只需逐个卸载即可
+        if (Array.isArray(oNode.children)) {
+          oNode.children.forEach(v => unmount(v));
+        } else if (typeof oNode.children === 'string') {
+          // 旧子节点是文本子节点，清空内容即可
+          setElementText(container, '');
+        }
+        // 没有子节点 没有操作
+      }
+      console.log(`----- patch oldTag: ${oNode.type}, newTag: ${nNode.type} -------------------`);
+    }
+
+    function patchKeyedChildren(oNode, nNode, container) {
+      const oldChildren = oNode.children;
+      const newChildren = nNode.children;
+
+      // 处理相同的前置节点
+      // 索引 j 指向新旧两组子节点的开头
+      let j = 0;
+      let oldVNode = oldChildren[j];
+      let newVNode = newChildren[j];
+      // while 循环向后遍历，直到遇到 key 不同的节点为止
+      while (oldVNode.key === newVNode.key) {
+        // 打补丁
+        patch(oldVNode, newVNode, container);
+        j++;  // 索引递增
+        oldVNode = oldChildren[j];
+        newVNode = newChildren[j];
+      }
+
+      // 更新相同的后置节点
+      let oldEnd = oldChildren.length - 1;
+      let newEnd = newChildren.length - 1;
+      oldVNode = oldChildren[oldEnd];
+      newVNode = newChildren[newEnd];
+      // while 循环从后向前遍历，直到遇到拥有不同 key 值的节点为止
+      while (oldVNode.key === newVNode.key) {
+        patch(oldVNode, newVNode, container);
+        oldEnd--;
+        newEnd--;
+        oldVNode = oldChildren[oldEnd];
+        newVNode = newChildren[newEnd];
+      }
+
+      // 新增节点
+      // 预处理完毕之后，如果满足以下条件，则说明 j--> newEnd 之间的节点应作为新节点插入
+      if (j > oldEnd && j <= newEnd) {
+        const anchorIndex = newEnd + 1;
+        const anchor = anchorIndex < newChildren.length ? newChildren[anchorIndex].el : null;
+        while (j <= newEnd) {
+          patch(null, newChildren[j++], container, anchor);
+        }
+      }
+
+      if (j > oldEnd && j <= newEnd) {
+
+      } else if (j > newEnd && j <= oldEnd) {
+        // j--> oldEnd 之间的节点都应该被卸载
+        while (j <= oldEnd) {
+          unmount(oldChildren[j++]);
+        }
+      }
+
+    }
+
+    const renderer = createRenderer(elementApi);
+    const vnode = {
+      type: 'div',
+      children: [
+        { type: 'p', children: '1', key: 1 },
+        { type: 'p', children: '2', key: 2 },
+        { type: 'p', children: '3', key: 3 }
+      ]
+    };
+    console.log('初始渲染的 vnode', vnode);
+    renderer.render(vnode, document.querySelector('#app'));
+
+    setTimeout(() => {
+      const vnode = {
+        type: 'div',
+        children: [
+          { type: 'p', children: '1', key: 1 },
+          { type: 'p', children: '3', key: 3 },
+        ]
+      };
+
+      console.log('二次渲染的 vnode', vnode);
+
+
+      console.log('``````````````````````` update `````````````````````');
+      renderer.render(vnode, document.querySelector('#app'));
+    }, 1000)
+  </script>
+</body>
+
+</html>
