@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编译优化-动态节点</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../un-vue/utils.js"></script>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script src="../un-vue/components.js"></script>
+  <script src="../un-vue/compiler.js"></script>
+  <script>
+    // 动态节点更新规则
+    const PatchFlags = {
+      TEXT: 1,
+      CLASS: 2,
+      STYLE: 3
+    }
+    const dynamicChildrenStack = [];  // 动态节点栈
+    let currentDynamicChildren = null;  // 当前动态节点集合
+
+    // 用来创建一个新的动态节点集合，并将该集合压入栈中
+    function openBlock() {
+      dynamicChildrenStack.push((currentDynamicChildren = []));
+    }
+
+    // 将动态节点集合从栈中弹出
+    function closeBlock() {
+      currentDynamicChildren = dynamicChildrenStack.pop();
+    }
+
+    // 创建动态更新的 vnode 父 vnode
+    function createBlock(tag, props, children) {
+      // block 本质上也是一个  vnode
+      const block = createVNode(tag, props, children);
+      // 将当前动态节点集合作为 block.dynamicChildren
+      block.dynamicChildren = currentDynamicChildren;
+
+      closeBlock();
+      return block
+    }
+
+    // 检查 vnode 是否需要添加到动态 vnode 中  
+    function createVNode(type, props, children, flags) {
+      const key = props && props.key;
+      props && delete props.key;
+
+      const vnode = {
+        type, props, children, key, patchFlags: flags
+      };
+
+      if (typeof flags != "undefined" && currentDynamicChildren) {
+        // 动态节点，将其添加到当前动态节点集合中
+        currentDynamicChildren.push(vnode);
+      }
+
+      return vnode
+    }
+
+    // 更新动态子节点
+    function patchBlockChildren(oNode, nNode) {
+      for (let i = 0; i < nNode.dynamicChildren.length; i++) {
+        patchElement(oNode.dynamicChildren[i], nNode.dynamicChildren[i]);
+      }
+    }
+
+    function patchElement(oNode, nNode) {
+      const el = nNode.el = oNode.el;
+      const oldProps = oNode.props;
+      const newProps = nNode.props;
+      // 定向更新
+      if (nNode.patchFlags) {
+        // 根据 PatchFlags 规则更新
+        if (nNode.patchFlags === 1) {
+          // 更新文本
+          setElementText(el, nNode.children);
+        } else if (nNode.patchFlags === 2) {
+          // 更新类名 or 属性
+          for (const key in newProps) {
+            patchProps(el, key, oldProps[key], newProps[key]);
+          }
+        }
+      } else {
+        // 全量更新
+        // 更新 props 为新 value
+        for (const key in newProps) {
+          if (newProps[key] !== oldProps[key]) {
+            patchProps(el, key, oldProps[key], newProps[key]);
+          }
+        }
+        // 更新 props 为 null
+        for (const key in oldProps) {
+          if (!(key in newProps)) {
+            patchProps(el, key, oldProps[key], null);
+          }
+        }
+        // 如果存在标记的动态子节点，则直接调用 patchBlockChildren
+        if (nNode.dynamicChildren) {
+          patchBlockChildren(oNode, nNode);
+        } else {
+          // 更新 children
+          patchChildren(oNode, nNode, el);
+        }
+      }
+    }
+
+    const renderer = createRenderer(elementApi);
+    const MyComponent = {
+      name: 'MyComponent',
+      data() {
+        return {
+          count: 1,
+          flag: false
+        }
+      },
+      created() {
+        setInterval(() => {
+          this.count++
+          this.flag = true
+        }, 3000)
+        setInterval(() => {
+          this.flag = false
+        }, 5000)
+      },
+      render() {
+        return (openBlock(), createBlock('div', { class: 'box', id: 'box' }, [
+          createVNode('p', { class: 'foo' }, this.count, PatchFlags.TEXT),
+          createVNode('p', { class: this.flag ? 'bar' : '' }, 'null', PatchFlags.CLASS)
+        ]))
+      }
+    };
+
+    const vnode1 = {
+      type: MyComponent
+    }
+
+    renderer.render(vnode1, document.querySelector('#app'));
+  </script>
+</body>
+
+</html>

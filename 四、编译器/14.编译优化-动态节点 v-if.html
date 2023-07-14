@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编译优化-动态节点</title>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script src="../un-vue/utils.js"></script>
+  <script src="../un-vue/reactivity.js"></script>
+  <script src="../un-vue/render.js"></script>
+  <script src="../un-vue/components.js"></script>
+  <script src="../un-vue/compiler.js"></script>
+  <script>
+    // 设置元素属性
+    patchProps = function (el, key, prevValue, nextValue) {
+      if (/^v-/.test(key)) {
+        const name = key.slice(2).toLowerCase();
+        console.log(name);
+      } else if (/^on/.test(key)) {
+        // 匹配以 on 开头的属性，视作事件
+        // 根据属性名称得到对应的事件名称 onClick => click
+        const name = key.slice(2).toLowerCase();
+        // 定义 el._vei 为一个对象，存在事件名称到事件处理函数的映射
+        const invokers = el._vei || (el._vei = {});
+        // 根据事件名称获取 invoker
+        let invoker = invokers[key];
+        if (nextValue) {
+          if (!invoker) {
+            // 将事件处理函数缓存到 el._vei[key]下，避免覆盖
+            invoker = el._vei[key] = (e) => {
+              // 如果事件发生的时间早于事件处理函数绑定的时间，则不执行事件处理函数
+              if (e.timeStamp < invoker.attached) return
+              if (Array.isArray(invoker.value)) {
+                invoker.value.forEach(fn => fn(e));
+              } else {
+                invoker.value(e);
+              }
+            }
+            invoker.value = nextValue;
+            // 储存事件处理函数被绑定的时间
+            invoker.attached = performance.now();
+            el.addEventListener(name, invoker);
+          } else {
+            invoker.value = nextValue;
+          }
+        } else if (invoker) {
+          el.removeEventListener(name, invoker);
+        }
+        el.addEventListener(name, nextValue);
+      } else if (key === 'class') {
+        // 对 class 进行特殊处理
+        el.className = normalizeClass(nextValue) || '';
+      } else if (shouldSetAsProps(el, key, nextValue)) {
+        // 判断是否应该作为 DOM Properties 设置
+        const type = typeof el[key];
+        if (type === 'boolean' && nextValue === '') {
+          el[key] = true;
+        } else {
+          el[key] = nextValue;
+        }
+      } else {
+        // 如果要设置的属性没有对应的 dom properties，则使用 setAttribute 设置属性
+        el.setAttribute(key, nextValue);
+      }
+    }
+
+    // 动态节点更新规则
+    const PatchFlags = {
+      TEXT: 1,
+      CLASS: 2,
+      STYLE: 3,
+      V_IF: 4,
+      V_ELSE: 5
+    }
+    const dynamicChildrenStack = [];  // 动态节点栈
+    let currentDynamicChildren = null;  // 当前动态节点集合
+
+    // 用来创建一个新的动态节点集合，并将该集合压入栈中
+    function openBlock() {
+      dynamicChildrenStack.push((currentDynamicChildren = []));
+    }
+
+    // 将动态节点集合从栈中弹出
+    function closeBlock() {
+      currentDynamicChildren = dynamicChildrenStack.pop();
+    }
+
+    // 创建动态更新的 vnode 父 vnode
+    function createBlock(tag, props, children) {
+      // block 本质上也是一个  vnode
+      const block = createVNode(tag, props, children);
+      // 将当前动态节点集合作为 block.dynamicChildren
+      block.dynamicChildren = currentDynamicChildren;
+
+      closeBlock();
+      console.log(JSON.stringify(block, null, 1))
+      return block
+    }
+
+    // 检查 vnode 是否需要添加到动态 vnode 中  
+    function createVNode(type, props, children, flags) {
+      const key = props && props.key;
+      props && delete props.key;
+
+      const vnode = {
+        type, props, children, key, patchFlags: flags
+      };
+
+      if (typeof flags != "undefined" && currentDynamicChildren) {
+        // 动态节点，将其添加到当前动态节点集合中
+        currentDynamicChildren.push(vnode);
+      }
+
+      return vnode
+    }
+
+    // 更新动态子节点
+    function patchBlockChildren(oNode, nNode) {
+      for (let i = 0; i < nNode.dynamicChildren.length; i++) {
+        patchElement(oNode.dynamicChildren[i], nNode.dynamicChildren[i]);
+      }
+    }
+
+    function patchElement(oNode, nNode) {
+      const el = nNode.el = oNode.el;
+      const oldProps = oNode.props;
+      const newProps = nNode.props;
+      // 定向更新
+      if (nNode.patchFlags) {
+        console.log(nNode.props);
+        // 根据 PatchFlags 规则更新
+        if (nNode.patchFlags === 1) {
+          // 更新文本
+          setElementText(el, nNode.children);
+        } else if (nNode.patchFlags === 2) {
+          // 更新类名 or 属性
+          for (const key in newProps) {
+            patchProps(el, key, oldProps[key], newProps[key]);
+          }
+        }
+      } else {
+        // 全量更新
+        // 更新 props 为新 value
+        for (const key in newProps) {
+          if (newProps[key] !== oldProps[key]) {
+            patchProps(el, key, oldProps[key], newProps[key]);
+          }
+        }
+        // 更新 props 为 null
+        for (const key in oldProps) {
+          if (!(key in newProps)) {
+            patchProps(el, key, oldProps[key], null);
+          }
+        }
+        // 如果存在标记的动态子节点，则直接调用 patchBlockChildren
+        if (nNode.dynamicChildren) {
+          patchBlockChildren(oNode, nNode);
+        } else {
+          debugger
+          // 更新 children
+          patchChildren(oNode, nNode, el);
+        }
+      }
+    }
+
+    const renderer = createRenderer(elementApi);
+    const MyComponent = {
+      name: 'MyComponent',
+      data() {
+        return {
+          count: 1,
+          flag: false
+        }
+      },
+      created() {
+        setInterval(() => {
+          this.count++
+          this.flag = true
+        }, 1000)
+        setInterval(() => {
+          this.flag = false
+        }, 5000)
+      },
+      render() {
+        return (openBlock(), createBlock('div', null, [
+          createVNode('section', { class: 'box', 'v-if': this.flag }, [
+            createVNode('p', {}, this.count, PatchFlags.TEXT),
+            createVNode('p', {}, this.count, PatchFlags.TEXT)
+          ], PatchFlags.V_IF),
+          createVNode('section', { class: 'box', 'v-else': this.flag }, [
+            createVNode('div', {}, [
+              createVNode('p', {}, this.count, PatchFlags.TEXT)
+            ]),
+          ], PatchFlags.V_ELSE)
+        ]))
+      }
+    };
+
+    const vnode1 = {
+      type: MyComponent
+    }
+
+    renderer.render(vnode1, document.querySelector('#app'));
+  </script>
+</body>
+
+</html>
