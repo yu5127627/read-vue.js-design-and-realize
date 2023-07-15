@@ -1,6 +1,7 @@
 const Text = Symbol();  // 定义文本节点
 const Comment = Symbol();   // 定义注解节点
 const Fragment = Symbol();  // 定义 Fragment 节点 (vue3 支持多跟节点的原理)
+const Static = Symbol();  // 定义 Fragment 节点 (vue3 支持多跟节点的原理)
 
 // 序列化 class
 function normalizeClass(value) {
@@ -43,6 +44,10 @@ const elementApi = {
   // 设置元素的文本节点
   setElementText(el, text) {
     el.textContent = text;
+  },
+  // 插入预字符串静态内容
+  createStatic(el,html) {
+    el.innerHTML = html;
   },
   // 在指定 parent 下添加指定元素
   insert(el, parent, anchor = null) {
@@ -341,7 +346,7 @@ function patchChildren(oNode, nNode, container) {
 }
 
 function createRenderer(options) {
-  const { createElement, setElementText, patchProps, createComment, createText, setText, insert } = options;
+  const { createElement, setElementText, createStatic, patchProps, createComment, createText, setText, insert } = options;
 
   // 挂载 vnode 到 container
   function mountElement(vnode, container, anchor) {
@@ -426,6 +431,8 @@ function createRenderer(options) {
       console.log(`--------------------- unmount tag: ${oNode.type}-------------------`);
       oNode = null;
     }
+    // 处理不需要渲染的情况 v-if=false
+    if(!nNode) return 
     // 运行到此处 说明新旧节点类型相同
     const { type } = nNode;
     if (typeof type === 'string') {
@@ -436,13 +443,16 @@ function createRenderer(options) {
         // oNode 存在，意味着打补丁，即更新内容
         patchElement(oNode, nNode);
       }
-    } else if (type === Text || type === Comment) {
-      // 插入注释节点 || 文本节点
+    } else if (type === Text || type === Comment || type === Static) {
+      // 插入注释节点 || 文本节点 || 预字符串
       if (!oNode) {
         if (type === Text) {
           nNode.el = createText(nNode.children);
         } else if (type === Comment) {
           nNode.el = createComment(nNode.children);
+        } else if (type === Static) {
+          nNode.el = createStatic(container, nNode.children);
+          return
         }
         const el = nNode.el;
         insert(el, container)

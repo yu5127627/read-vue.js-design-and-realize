@@ -9,7 +9,7 @@
     }
   ],
   // 重新设定tabsize
-  "editor.tabSize": 1,
+  "editor.tabSize": 2,
   //失去焦点后自动保存
   "files.autoSave": "onFocusChange",
   // #值设置为true时，每次保存的时候自动格式化；
@@ -19,7 +19,7 @@
     "**/node_modules": true,
     "**/bower_components": true,
     "**/target": true,
-    "**/logs": true,
+    "**/logs": true
   },
   // 关闭文件夹缩略，即只有一个子文件夹也同样显示父文件夹
   "explorer.compactFolders": false,
