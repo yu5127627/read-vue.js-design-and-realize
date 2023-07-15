@@ -169,10 +169,11 @@ function mountComponent(vnode, container, anchor) {
       // 初次挂载
       if (Array.isArray(subTree)) {
         for (const tree of subTree) {
-          patch(null, tree, container, anchor);
+          vnode.el ? hydrateNode(vnode.el, tree) : patch(null, tree, container, anchor);
         }
       } else {
-        patch(null, subTree, container, anchor);
+        vnode.el ? hydrateNode(vnode.el, subTree) : patch(null, subTree, container, anchor);
+        // patch(null, subTree, container, anchor);
       }
 
       // 更新组件的挂载状态

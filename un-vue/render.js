@@ -507,8 +507,9 @@ function createRenderer(options) {
     container._vnode = vnode;
   }
 
-  function hydrate(vnode, container) { }
+  hydrate = hydrate;
 
+  window.hydrate = hydrate;
   window.unmount = unmount;
   window.patchChildren = patchChildren;
   window.patch = patch;
